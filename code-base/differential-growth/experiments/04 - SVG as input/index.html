@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <title>04 - SVG as input</title>
+
+  <meta name="description" content="2D differential growth experiment in JavaScript with shapes imported from SVG files">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Facebook OG -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jasonwebb.github.io/2d-differential-growth-experiments/04%20-%20SVG%20as%20input/">
+  <meta property="og:title" content="04 - SVG as input">
+  <meta property="og:image" content="images/social-media-preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="600">
+  <meta property="og:description" content="2D differential growth experiment in JavaScript with shapes imported from SVG files">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:creator" content="@jasonwebb">
+  <meta name="twitter:url" content="https://jasonwebb.github.io/2d-differential-growth-experiments/04%20-%20SVG%20as%20input/">
+  <meta name="twitter:title" content="04 - SVG as input">
+  <meta name="twitter:description" content="2D differential growth experiment in JavaScript with shapes imported from SVG files">
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/jasonwebb/2d-differential-growth-experiments/master/04%20-%20SVG%20as%20input/images/social-media-preview.png">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+
+      display: block;
+
+      z-index: 1;
+    }
+
+    svg,
+    object {
+        opacity: 0;
+        z-index: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <object id="differential-growth" data="svg/differential-growth.svg" type="image/svg+xml"></object>
+  <object id="hello-world-serif" data="svg/hello-world-serif.svg" type="image/svg+xml"></object>
+  <object id="superformula" data="svg/superformula.svg" type="image/svg+xml"></object>
+  <object id="gnu" data="svg/gnu.svg" type="image/svg+xml"></object>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.1/p5.min.js"></script>
+  <script src="dist/app.min.js"></script>
+</body>
+
+</html>

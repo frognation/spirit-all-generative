@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <title>Cellular Automata Explorer</title>
+
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <link rel="stylesheet" type="text/css" href="styles.css">
+
+  <!-- Facebook OG -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="">
+  <meta property="og:title" content="">
+  <meta property="og:image" content="">
+  <meta property="og:image:width" content="">
+  <meta property="og:image:height" content="">
+  <meta property="og:description" content="">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:creator" content="@jasonwebb">
+  <meta name="twitter:title" content="">
+  <meta name="twitter:description" content="">
+  <meta name="twitter:image" content="">
+</head>
+
+<body style="display: flex; justify-content: center; align-items: center; height: 100vh">
+  <header class="sr-only">
+    <h1>Cellular Automata Explorer</h1>
+  </header>
+
+  <main class="container">
+    <div id="left-panel-container"></div>
+    <div id="center-controls-container"></div>
+
+    <div id="canvas-wrapper">
+      <canvas id="canvas" tabindex="0" aria-label="Canvas"></canvas>
+    </div>
+
+    <div id="right-panel-container"></div>
+  </main>
+
+  <canvas id="buffer-canvas" style="display: none;"></canvas>
+  <img id="buffer-image" style="display: none;" alt="">
+
+  <div id="about-dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-dialog-heading">
+    <div class="content">
+      <button class="close-button">
+        <span class="fas fa-times" aria-hidden="true"></span>
+        <span class="sr-only">Close</span>
+      </button>
+
+      <h1 id="about-dialog-heading">About Cellular Automata Explorer</h1>
+
+      <p>This interactive app provides a UI for exploring cellular automata (CA) by exposing granular controls for most of the important parameters including survival/birth counts, neighborhood type, range, and more.</p>
+
+      <p>Currently this app only supports so-called "Life-like" rules, including Larger than Life and Generations. Square cells in a regular grid with discrete, deterministic states</p>
+
+      <div class="row">
+        <div class="keyboard-section">
+          <h2>Keyboard</h2>
+
+          <ul>
+            <li><code>Space</code> - pause/play</li>
+            <li><code>r</code> - restart</li>
+            <li><code>u</code> - show/hide the UI</li>
+            <li><code>h</code> - show this "about" panel</li>
+          </ul>
+        </div>
+
+        <div class="mouse-section">
+          <h2>Mouse</h2>
+
+          <ul>
+            <li><b>Click and drag</b> to set all cells within the brush radius to 0.</li>
+            <li>Use the <b>mouse wheel</b> to make the brush size bigger or smaller.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>Accessibility</h2>
+      <ul>
+        <li>All UI controls can be reached and operated by keyboard.</li>
+        <li>To paint on the canvas, first set focus onto the canvas, then use the following keys to interact with it:
+          <ul>
+            <li>Hold down <code>Space</code> to touch the brush to the canvas. Release to lift it.</li>
+            <li>Use your arrow keys to move the brush around.</li>
+            <li>Hold down <code>Shift</code> while moving to go faster. Release it to return to normal speed.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <div class="credits">
+        <h2>Credits</h2>
+        <ul>
+          <li>Mirek Wojtowicz for the <a href="http://www.mirekw.com/ca/ca_rules.html" target="_blank">Cellular Automata rules lexicon</a>, which all of the rule Presets come from.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="seizure-warning-dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="seizure-warning-heading">
+    <div class="content">
+      <h1 id="seizure-warning-heading">WARNING!</h1>
+
+      <p>Some settings in this app can cause rapid flashing that may trigger seizures.</p>
+      <p>These settings can be hard to predict and can happen without warning as you interact with the UI.</p>
+
+      <button>Okay</button>
+
+      <label>
+        <input type="checkbox">
+        <span>Don't ask again.</span>
+      </label>
+    </div>
+  </div>
+
+  <script src="dist/ca.bundle.js"></script>
+</body>
+</html>

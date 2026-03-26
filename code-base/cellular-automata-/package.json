@@ -1,0 +1,31 @@
+{
+  "name": "2d-cellular-automata-experiments",
+  "version": "1.0.0",
+  "description": "",
+  "main": "webpack.config.js",
+  "devDependencies": {
+    "cellular-automata-rule-parser": "^3.0.1",
+    "fps": "^0.0.3",
+    "glsl-shader-loader": "^0.1.6",
+    "path": "^0.12.7",
+    "three": "^0.126.1",
+    "webpack": "^4.42.1",
+    "webpack-cli": "^3.3.11",
+    "webpack-dev-server": "^3.10.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "serve": "webpack-dev-server",
+    "build": "webpack"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jasonwebb/2d-cellular-automata-experiments.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jasonwebb/2d-cellular-automata-experiments/issues"
+  },
+  "homepage": "https://github.com/jasonwebb/2d-cellular-automata-experiments#readme"
+}

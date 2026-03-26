@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <title>2D Voronoi experiments in JavaScript</title>
+
+  <meta name="description" content="2D Voronoi experiments in JavaScript">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Facebook OG -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jasonwebb.github.io/2d-voronoi-experiments/">
+  <meta property="og:title" content="2D Voronoi experiments in JavaScript">
+  <meta property="og:image" content="https://jasonwebb.github.io/2d-voronoi-experiments/media/rings.png">
+  <meta property="og:image:width" content="192">
+  <meta property="og:image:height" content="937">
+  <meta property="og:description" content="Series of visual experiments exploring 2D Voronoi diagrams in JavaScript with p5.js">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:creator" content="@jasonwebb">
+  <meta name="twitter:title" content="2D Voronoi experiments in JavaScript">
+  <meta name="twitter:description" content="Series of visual experiments exploring 2D Voronoi diagrams in JavaScript with p5.js">
+  <meta name="twitter:image" content="https://jasonwebb.github.io/2d-voronoi-experiments/media/rings.png">
+
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+  <header class="content">
+    <h1>2D Voronoi experiments in JavaScript</h1>
+
+    <p><a href="https://en.wikipedia.org/wiki/Voronoi_diagram" target="_blank">Voronoi</a> diagrams are a way of partitioning space into <i>cells</i> based on a set of points such that every location within each cell is closer to it's generating point than to any other point. They have been studied for a very long time and found to be useful in many practical and artistic applications.</p>
+
+    <p>Of particular interest to me is how Voronoi diagrams can be used to closely model natural space partitioning behaviors seen biological and physical systems like <a href="https://upload.wikimedia.org/wikipedia/commons/d/d2/Diatom_-_Arachnoidiscus_sp_-_400x_%2816212069516%29.jpg" target="_blank">diatoms</a>, <a href="https://i.pinimg.com/736x/69/33/f4/6933f40411bb350c50205dd75e676746--organic-patterns-ernst-haeckel.jpg" target="_blank">radiolaria</a>, <a href="https://imgur.com/G64P6aY" target="_blank">bubbles / foams</a>, <a href="https://upload.wikimedia.org/wikipedia/commons/2/2c/Desiccation-cracks_hg.jpg" target="_blank">cracked mud</a>, <a href="https://upload.wikimedia.org/wikipedia/commons/5/5d/Dryobalanops_Aromatica_canopy.jpg" target="_blank">tree canopies</a>, <a href="https://www.youtube.com/watch?v=k1Fna7jYVBY" target="_blank">leaf venation</a>, and more.</p>
+
+    <p>This page collects a few visual experiments I built in modern JavaScript using <a href="https://p5js.org/" target="_blank">p5.js</a> and <a href="https://github.com/d3/d3-delaunay" target="_blank">d3-delaunay</a>.</p>
+
+    <a href="https://github.com/jasonwebb/2d-voronoi-experiments" class="button is-info">
+      <span class="fab fa-github" aria-hidden="true"></span>
+      View the source code on Github
+    </a>
+  </header>
+
+  <main>
+    <ul>
+      <li>
+        <a href="basic/">
+          <div class="overlay">Basic Voronoi</div>
+          <img src="media/basic.png" alt="Screenshot of basic Voronoi sketch">
+        </a>
+      </li>
+      
+      <li>
+        <a href="rings/">
+          <div class="overlay">Rings</div>
+          <img src="media/rings.png" alt="Screenshot of Rings sketch">
+        </a>
+      </li>
+      
+      <li>
+        <a href="rings-in-motion/">
+          <div class="overlay">Rings in motion</div>
+          <video autoplay="true" loop="true" preload="auto">
+            <source src="media/rings-in-motion.webm" type="video/webm">
+          </video>
+        </a>
+      </li>
+      
+      <li>
+        <a href="orbits/">
+          <div class="overlay">Orbits</div>
+          <video autoplay="true" loop="true" preload="auto">
+            <source src="media/orbits-2.webm" type="video/webm">
+          </video>
+        </a>
+      </li>
+
+      <li>
+        <a href="playground/">
+          <div class="overlay">Playground</div>
+          <img src="media/playground.png" alt="Screenshot of playground application">
+        </a>
+      </li>
+      
+      <li>
+        <a href="reducing-radii/">
+          <div class="overlay">Reducing radii</div>
+          <img src="media/reducing-radii.png" alt="Screenshot of reducing radii sketch">
+        </a>
+      </li>
+      
+      <li>
+        <a href="phyllotaxis/">
+          <div class="overlay">Phyllotaxis</div>
+          <img src="media/phyllotaxis.png" alt="Screenshot of phyllotaxis sketch">
+        </a>
+      </li>
+    </ul>
+  </main>
+</body>
+</html>

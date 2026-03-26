@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spirit Can Editor — UI Design Base</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Download Badge (web-only reference) ── -->
+  <div class="download-badge">
+    <a href="#">&darr; Desktop App</a>
+    <a href="#" class="secondary">Intel</a>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Canvas Area (3D viewport placeholder)
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="canvas-area">
+    <span class="canvas-placeholder">3D Viewport</span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Bottom HUD
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="hud">
+    <!-- Undo -->
+    <button class="hud-btn disabled" title="Undo (⌘Z)">&circlearrowleft;</button>
+    <!-- Redo -->
+    <button class="hud-btn disabled" title="Redo (⌘⇧Z)">&circlearrowright;</button>
+
+    <div class="hud-divider"></div>
+
+    <!-- Reset view -->
+    <button class="hud-btn" title="Reset to front">&#10227;</button>
+
+    <!-- Play / Pause -->
+    <button class="hud-pill active" id="hud-play">&#9208;</button>
+
+    <!-- Speed -->
+    <div class="hud-speed">
+      <input type="range" id="speed-slider" min="0.2" max="3" step="0.1" value="1.0" />
+      <span class="hud-speed-label" id="speed-label">1.0&times;</span>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- Level -->
+    <button class="hud-pill" id="hud-level">Level</button>
+
+    <div class="hud-divider"></div>
+
+    <!-- Relight -->
+    <button class="hud-pill" id="hud-relight">&#9673;</button>
+
+    <!-- PNG -->
+    <button class="hud-pill">PNG</button>
+
+    <!-- 360 video -->
+    <button class="hud-pill">360&deg;</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Right Sidebar
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="sidebar">
+
+    <!-- Header -->
+    <div class="sidebar-header">
+      <div class="sidebar-title">Spirit Can Editor</div>
+      <div class="sidebar-version">2.0</div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── CAN ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="can">
+        <span class="section-title">Can</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-can">
+        <div class="can-sizes">
+          <button class="can-size-btn active" data-can-size="355ml">
+            <div class="can-size-label">355ML</div>
+            <div class="can-size-sub">414 &times; 220 mm</div>
+          </button>
+          <button class="can-size-btn" data-can-size="475ml">
+            <div class="can-size-label">475ML</div>
+            <div class="can-size-sub">414 &times; 280 mm</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── IMAGE ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="image">
+        <div class="section-title-row">
+          <span class="section-title">Image</span>
+          <span class="paste-badge paste-badge--label">&#8984;V</span>
+        </div>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-image">
+        <!-- Drop zone -->
+        <div class="drop-zone" id="label-drop">
+          <div class="drop-zone-title" id="drop-title">Drop or click to upload</div>
+          <div class="drop-zone-sub">PNG &middot; JPG &middot; Ctrl+V</div>
+        </div>
+        <!-- Unload Label -->
+        <button class="btn-unload" id="unload-label">Unload Label</button>
+        <!-- Optimal size -->
+        <div class="info-card">
+          <span class="info-card-label">Optimal size</span>
+          <span class="info-card-value" id="optimal-size">414 &times; 220 mm</span>
+        </div>
+
+        <!-- Image controls (shown when image loaded — demo collapsed) -->
+        <!--
+        <div class="slider-row">
+          <span class="slider-label">Scale</span>
+          <input type="range" min="0.1" max="1.5" step="0.01" value="1.0" data-format="percent" />
+          <span class="slider-value">100%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Position X</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">+0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Position Y</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">+0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Rotation</span>
+          <input type="range" min="-180" max="180" step="1" value="0" data-format="degree" />
+          <span class="slider-value">0°</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="sub-label-sm">BG Color</span>
+          <input type="color" value="#c6c6c8" style="width:32px;height:24px;border-radius:4px" />
+        </div>
+        <button class="btn-unload">Invert Colors</button>
+        <button class="btn-unload">Remove Background</button>
+        <button class="btn-unload">Unload Image</button>
+        -->
+
+        <!-- Recent images (demo placeholders) -->
+        <div>
+          <div class="recent-label">Recent</div>
+          <div class="recent-grid">
+            <div class="recent-thumb active"><div style="width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2)"></div></div>
+            <div class="recent-thumb"><div style="width:100%;height:100%;background:linear-gradient(135deg,#f093fb,#f5576c)"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── STICKER ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="sticker">
+        <div class="section-title-row">
+          <span class="section-title">Sticker</span>
+        </div>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-sticker">
+        <div class="drop-zone">
+          <div class="drop-zone-title">Click to upload sticker</div>
+          <div class="drop-zone-sub">PNG &middot; &#8984;V to paste</div>
+        </div>
+
+        <!-- Sticker controls (shown when sticker loaded — demo collapsed) -->
+        <!--
+        <div class="slider-row">
+          <span class="slider-label">Scale</span>
+          <input type="range" min="0.05" max="1.5" step="0.01" value="1.0" data-format="percent" />
+          <span class="slider-value">100%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Position X</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">+0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Position Y</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">+0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Rotation</span>
+          <input type="range" min="-180" max="180" step="1" value="0" data-format="degree" />
+          <span class="slider-value">0°</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Shadow</span>
+          <input type="range" min="0" max="1" step="0.01" value="0.3" data-format="percent" />
+          <span class="slider-value">30%</span>
+        </div>
+        <div class="sub-label-sm" style="padding-top:4px">Material</div>
+        <div class="slider-row">
+          <span class="slider-label">Roughness</span>
+          <input type="range" min="0" max="1" step="0.01" value="0.8" data-format="fixed2" />
+          <span class="slider-value">0.80</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Metalness</span>
+          <input type="range" min="0" max="1" step="0.01" value="0.0" data-format="fixed2" />
+          <span class="slider-value">0.00</span>
+        </div>
+        <button class="btn-unload">Remove Background</button>
+        <button class="btn-unload">Unload Sticker</button>
+        -->
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── MATERIAL ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="material">
+        <span class="section-title">Material</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-material" style="gap:16px">
+        <div>
+          <div class="sub-label" style="margin-bottom:8px">Metal Finish</div>
+          <div class="pill-group">
+            <button class="pill" data-material="matte">Matte</button>
+            <button class="pill active" data-material="satin">Satin</button>
+            <button class="pill" data-material="glossy">Glossy</button>
+            <button class="pill" data-material="chrome">Chrome</button>
+            <button class="pill" data-material="custom">Custom</button>
+          </div>
+        </div>
+        <!-- Preset info (non-custom) -->
+        <div class="info-card" id="material-preset-info">
+          <span class="info-card-label" style="font-size:10px;letter-spacing:0.08em">Label</span>
+          <span class="info-card-value">Satin <span style="opacity:0.45;margin-left:6px">0.21</span></span>
+        </div>
+        <!-- Custom controls (hidden by default) -->
+        <div id="material-custom" class="hidden" style="display:flex;flex-direction:column;gap:12px">
+          <div class="slider-row">
+            <span class="slider-label">Label Rough</span>
+            <input type="range" min="0" max="1" step="0.01" value="0.21" data-format="fixed2" />
+            <span class="slider-value">0.21</span>
+          </div>
+          <!-- Top Metal -->
+          <div>
+            <div class="sub-label-sm" style="margin-bottom:8px">Top Metal</div>
+            <div class="color-row" style="margin-bottom:10px">
+              <input type="color" value="#c0c0c0" />
+              <input class="input-text" value="#c0c0c0" />
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="slider-row">
+                <span class="slider-label">Roughness</span>
+                <input type="range" min="0" max="1" step="0.01" value="0.48" data-format="fixed2" />
+                <span class="slider-value">0.48</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Brightness</span>
+                <input type="range" min="0.5" max="2" step="0.05" value="1.35" data-format="fixed2" />
+                <span class="slider-value">1.35</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Emissive</span>
+                <input type="range" min="0" max="2" step="0.01" value="0.01" data-format="fixed2" />
+                <span class="slider-value">0.01</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Env Reflect</span>
+                <input type="range" min="0" max="4" step="0.1" value="1.4" data-format="fixed1" />
+                <span class="slider-value">1.4</span>
+              </div>
+            </div>
+          </div>
+          <!-- Bottom Metal -->
+          <div>
+            <div class="sub-label-sm" style="margin-bottom:8px">Bottom Metal</div>
+            <div class="color-row" style="margin-bottom:10px">
+              <input type="color" value="#c0c0c0" />
+              <input class="input-text" value="#c0c0c0" />
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="slider-row">
+                <span class="slider-label">Roughness</span>
+                <input type="range" min="0" max="1" step="0.01" value="0.48" data-format="fixed2" />
+                <span class="slider-value">0.48</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Brightness</span>
+                <input type="range" min="0.5" max="2" step="0.05" value="1.35" data-format="fixed2" />
+                <span class="slider-value">1.35</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Emissive</span>
+                <input type="range" min="0" max="2" step="0.01" value="0.01" data-format="fixed2" />
+                <span class="slider-value">0.01</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Env Reflect</span>
+                <input type="range" min="0" max="4" step="0.1" value="1.4" data-format="fixed1" />
+                <span class="slider-value">1.4</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── LIGHTING ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="lighting">
+        <span class="section-title">Lighting</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-lighting" style="gap:12px">
+        <div class="slider-row">
+          <span class="slider-label">Brightness</span>
+          <input type="range" min="0" max="4" step="0.01" value="1.0" data-format="fixed2" />
+          <span class="slider-value">1.00</span>
+        </div>
+        <div>
+          <div class="sub-label" style="margin-bottom:8px">Mode</div>
+          <div class="mode-toggle">
+            <button class="mode-btn active" data-light-mode="bar">Bar</button>
+            <button class="mode-btn" data-light-mode="studio">Studio</button>
+          </div>
+        </div>
+        <!-- Bar controls -->
+        <div id="bar-controls" style="display:flex;flex-direction:column;gap:12px">
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:48px;flex-shrink:0">Color</span>
+            <input type="color" value="#fafafa" />
+            <input class="input-text" value="#fafafa" />
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Intensity</span>
+            <input type="range" min="0" max="20" step="0.05" value="4.0" data-format="fixed1" />
+            <span class="slider-value">4.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Rotation</span>
+            <input type="range" min="0" max="360" step="1" value="0" data-format="degree" />
+            <span class="slider-value">0&deg;</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Height</span>
+            <input type="range" min="-3" max="3" step="0.01" value="0" data-format="fixed2" />
+            <span class="slider-value">0.00</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Distance</span>
+            <input type="range" min="0.5" max="15" step="0.1" value="6.0" data-format="fixed1" />
+            <span class="slider-value">6.0</span>
+          </div>
+        </div>
+        <!-- Advanced -->
+        <button class="advanced-toggle" id="advanced-toggle">
+          <span>&#9656; Advanced</span>
+        </button>
+        <div id="advanced-body" class="hidden" style="display:flex;flex-direction:column;gap:12px;padding-top:4px">
+          <div class="slider-row">
+            <span class="slider-label">Bar Width</span>
+            <input type="range" min="0.1" max="12" step="0.1" value="3.0" data-format="fixed1" />
+            <span class="slider-value">3.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Bar Height</span>
+            <input type="range" min="0.1" max="16" step="0.1" value="8.0" data-format="fixed1" />
+            <span class="slider-value">8.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Other Str</span>
+            <input type="range" min="0" max="3" step="0.01" value="0.65" data-format="fixed2" />
+            <span class="slider-value">0.65</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Other Rot</span>
+            <input type="range" min="0" max="360" step="1" value="180" data-format="degree" />
+            <span class="slider-value">180&deg;</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Ambient</span>
+            <input type="range" min="0" max="10" step="0.1" value="0.6" data-format="fixed1" />
+            <span class="slider-value">0.6</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Fill</span>
+            <input type="range" min="0" max="10" step="0.1" value="1.5" data-format="fixed1" />
+            <span class="slider-value">1.5</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Rim</span>
+            <input type="range" min="0" max="10" step="0.1" value="2.0" data-format="fixed1" />
+            <span class="slider-value">2.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Directional</span>
+            <input type="range" min="0" max="10" step="0.1" value="1.0" data-format="fixed1" />
+            <span class="slider-value">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">FOV</span>
+            <input type="range" min="10" max="60" step="0.1" value="10" data-format="degree" />
+            <span class="slider-value">10&deg;</span>
+          </div>
+          <div>
+            <div class="sub-label-sm" style="margin-bottom:6px">Light Direction (X &middot; Y &middot; Z)</div>
+            <div class="num-grid">
+              <input class="input-text" type="number" value="5" placeholder="X" />
+              <input class="input-text" type="number" value="5" placeholder="Y" />
+              <input class="input-text" type="number" value="5" placeholder="Z" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── CONTROLS ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="controls">
+        <span class="section-title">Controls</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-controls" style="gap:16px">
+        <div>
+          <div class="sub-label" style="margin-bottom:8px">Preset</div>
+          <div class="pill-group">
+            <button class="pill">Save JSON</button>
+            <button class="pill">Load JSON</button>
+          </div>
+        </div>
+        <button class="btn-reset">Reset View</button>
+        <button class="btn-reset">Reset to Default</button>
+      </div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+  </div>
+
+  <!-- ── Dark / Light Toggle ── -->
+  <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+    <!-- JS will inject SVG -->
+  </button>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

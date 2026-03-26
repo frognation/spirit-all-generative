@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spirit Generative Tool</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       LEFT SIDEBAR — Input + Transform
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="sidebar sidebar--left">
+
+    <div class="sidebar-header">
+      <div class="sidebar-title">Spirit Gen</div>
+      <div class="sidebar-version">1.0</div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── Input Mode Tabs ── -->
+    <div class="input-tabs">
+      <button class="input-tab active" data-input-tab="type">Type</button>
+      <button class="input-tab" data-input-tab="image">Image</button>
+    </div>
+
+    <!-- ── Type Panel ── -->
+    <div class="input-panel" id="panel-type">
+      <div class="section-body" style="gap:12px">
+        <!-- Text input -->
+        <textarea class="input-textarea" id="text-input" rows="3" placeholder="Enter text...">Spirit</textarea>
+
+        <!-- Font family -->
+        <div>
+          <div class="sub-label" style="margin-bottom:6px">Font</div>
+          <select class="input-select" id="font-select">
+            <optgroup label="System">
+              <option value="ui-monospace">Monospace</option>
+              <option value="serif">Serif</option>
+              <option value="sans-serif">Sans Serif</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="Impact, sans-serif">Impact</option>
+              <option value="'Courier New', monospace">Courier New</option>
+            </optgroup>
+            <optgroup label="Custom" id="font-group-custom" class="hidden">
+            </optgroup>
+            <optgroup label="Uploaded" id="font-group-uploaded" class="hidden">
+            </optgroup>
+          </select>
+          <!-- Font upload -->
+          <div class="font-upload-row">
+            <button class="btn-font-upload" id="btn-font-upload">+ Upload Font</button>
+            <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2" multiple hidden />
+          </div>
+        </div>
+
+        <!-- Font weight -->
+        <div>
+          <div class="sub-label" style="margin-bottom:6px">Weight</div>
+          <div class="pill-group">
+            <button class="pill" data-weight="300">Light</button>
+            <button class="pill active" data-weight="400">Regular</button>
+            <button class="pill" data-weight="700">Bold</button>
+            <button class="pill" data-weight="900">Black</button>
+          </div>
+        </div>
+
+        <!-- Fill color -->
+        <div>
+          <div class="sub-label" style="margin-bottom:6px">Fill Color</div>
+          <div class="color-row">
+            <input type="color" value="#ffffff" id="text-color" />
+            <input class="input-text" value="#ffffff" id="text-color-hex" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Image Panel ── -->
+    <div class="input-panel hidden" id="panel-image">
+      <div class="section-body" style="gap:12px">
+        <div class="drop-zone" id="image-drop">
+          <div class="drop-zone-icon" style="font-size:20px;color:var(--text-tertiary);margin-bottom:2px">&#9655;</div>
+          <div class="drop-zone-title" id="image-drop-title">Drop image file</div>
+          <div class="drop-zone-sub">SVG &middot; PNG &middot; JPG &middot; WebP</div>
+        </div>
+        <div class="image-preview-wrap hidden" id="image-preview-wrap">
+          <img id="image-preview" alt="preview" />
+        </div>
+        <button class="btn-unload" id="clear-image">Clear Image</button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── Transform ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="transform">
+        <span class="section-title">Transform</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-transform" style="gap:10px">
+        <div class="slider-row">
+          <span class="slider-label">Scale</span>
+          <input type="range" min="0.1" max="3" step="0.01" value="1.0" data-format="fixed2" />
+          <span class="slider-value">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Rotate</span>
+          <input type="range" min="-180" max="180" step="1" value="0" data-format="degree" />
+          <span class="slider-value">0&deg;</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Blur</span>
+          <input type="range" min="0" max="20" step="0.1" value="0" data-format="fixed1" />
+          <span class="slider-value">0.0</span>
+        </div>
+        <div class="slider-row" id="tracking-row">
+          <span class="slider-label">Tracking</span>
+          <input type="range" min="-5" max="50" step="0.5" value="0" data-format="fixed1" />
+          <span class="slider-value">0.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Offset X</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">0%</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Offset Y</span>
+          <input type="range" min="-0.5" max="0.5" step="0.01" value="0" data-format="percent" />
+          <span class="slider-value">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ── Canvas ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="canvas-cfg">
+        <span class="section-title">Canvas</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-canvas-cfg" style="gap:10px">
+        <div class="pill-group">
+          <button class="pill" data-canvas-size="1080x1080">1:1</button>
+          <button class="pill active" data-canvas-size="1920x1080">16:9</button>
+          <button class="pill" data-canvas-size="1080x1920">9:16</button>
+          <button class="pill" data-canvas-size="3840x2160">4K</button>
+        </div>
+        <div class="info-card">
+          <span class="info-card-label">Resolution</span>
+          <span class="info-card-value" id="canvas-res">1920 &times; 1080</span>
+        </div>
+        <div class="color-row">
+          <span class="sub-label-sm" style="min-width:32px;flex-shrink:0">BG</span>
+          <input type="color" value="#000000" id="bg-color" />
+          <input class="input-text" value="#000000" id="bg-color-hex" />
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       CENTER — Effect Tabs + Canvas Viewport
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="canvas-area">
+
+    <!-- Effect tab bar -->
+    <div class="effect-tab-bar">
+      <button class="effect-tab active" data-effect="reaction-diffusion">Reaction Diffusion</button>
+      <button class="effect-tab" data-effect="cellular-automata">Cellular Automata</button>
+      <button class="effect-tab" data-effect="differential-growth">Differential Growth</button>
+      <button class="effect-tab" data-effect="limited-aggregation">Limited Aggregation</button>
+      <button class="effect-tab" data-effect="space-colonization">Space Colonization</button>
+      <button class="effect-tab" data-effect="voronoi">Voronoi</button>
+    </div>
+
+    <!-- Viewport -->
+    <div class="canvas-viewport">
+      <canvas id="main-canvas" width="640" height="640"></canvas>
+    </div>
+
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       RIGHT SIDEBAR — Effect Parameters
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="sidebar sidebar--right">
+
+    <div class="sidebar-header">
+      <div class="sidebar-title" id="effect-title">Reaction Diffusion</div>
+      <div class="sidebar-version">Effect</div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- ══════════════════════════════════
+         REACTION DIFFUSION
+         ══════════════════════════════════ -->
+    <div class="effect-panel" id="effect-reaction-diffusion">
+
+      <div>
+        <button class="section-btn" data-section-toggle="rd-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-rd-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="rd-seed-val">4291</span>
+            <button class="btn-seed" data-seed-target="rd-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Feed Rate</span>
+            <input type="range" min="0.010" max="0.100" step="0.001" value="0.055" data-format="fixed3" />
+            <span class="slider-value">0.055</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Kill Rate</span>
+            <input type="range" min="0.040" max="0.075" step="0.001" value="0.062" data-format="fixed3" />
+            <span class="slider-value">0.062</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Diffuse A</span>
+            <input type="range" min="0.5" max="1.5" step="0.01" value="1.0" data-format="fixed2" />
+            <span class="slider-value">1.00</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Diffuse B</span>
+            <input type="range" min="0.1" max="0.7" step="0.01" value="0.5" data-format="fixed2" />
+            <span class="slider-value">0.50</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Iter/Frame</span>
+            <input type="range" min="1" max="30" step="1" value="10" data-format="fixed0" />
+            <span class="slider-value">10</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Brush Size</span>
+            <input type="range" min="1" max="60" step="1" value="15" data-format="fixed0" />
+            <span class="slider-value">15</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="rd-color">
+          <span class="section-title">Color</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-rd-color" style="gap:10px">
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Color A</span>
+            <input type="color" value="#000000" />
+            <input class="input-text" value="#000000" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Color B</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Blend Mode</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="rd-blend">Normal</button>
+              <button class="pill" data-group="rd-blend">Overlay</button>
+              <button class="pill" data-group="rd-blend">Screen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /reaction-diffusion -->
+
+
+    <!-- ══════════════════════════════════
+         CELLULAR AUTOMATA
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-cellular-automata">
+
+      <div>
+        <button class="section-btn" data-section-toggle="ca-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ca-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="ca-seed-val">7832</span>
+            <button class="btn-seed" data-seed-target="ca-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Rule</span>
+            <input type="range" min="0" max="255" step="1" value="110" data-format="fixed0" />
+            <span class="slider-value">110</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Density</span>
+            <input type="range" min="0.1" max="0.9" step="0.01" value="0.5" data-format="percent" />
+            <span class="slider-value">50%</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Cell Size</span>
+            <input type="range" min="1" max="20" step="1" value="4" data-format="fixed0" />
+            <span class="slider-value">4</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Gen/Frame</span>
+            <input type="range" min="1" max="20" step="1" value="1" data-format="fixed0" />
+            <span class="slider-value">1</span>
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Neighborhood</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="ca-hood">Moore</button>
+              <button class="pill" data-group="ca-hood">Von Neumann</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="ca-color">
+          <span class="section-title">Color</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ca-color" style="gap:10px">
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Alive</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Dead</span>
+            <input type="color" value="#000000" />
+            <input class="input-text" value="#000000" />
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Fade Mode</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="ca-fade">Hard</button>
+              <button class="pill" data-group="ca-fade">Trail</button>
+              <button class="pill" data-group="ca-fade">Glow</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /cellular-automata -->
+
+
+    <!-- ══════════════════════════════════
+         DIFFERENTIAL GROWTH
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-differential-growth">
+
+      <div>
+        <button class="section-btn" data-section-toggle="dg-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-dg-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="dg-seed-val">2048</span>
+            <button class="btn-seed" data-seed-target="dg-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Max Force</span>
+            <input type="range" min="0.01" max="1.0" step="0.01" value="0.15" data-format="fixed2" />
+            <span class="slider-value">0.15</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Max Speed</span>
+            <input type="range" min="0.01" max="2.0" step="0.01" value="0.5" data-format="fixed2" />
+            <span class="slider-value">0.50</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Sep Radius</span>
+            <input type="range" min="2" max="50" step="0.5" value="9" data-format="fixed1" />
+            <span class="slider-value">9.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Cohesion</span>
+            <input type="range" min="0" max="1" step="0.01" value="0.5" data-format="fixed2" />
+            <span class="slider-value">0.50</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Max Nodes</span>
+            <input type="range" min="100" max="5000" step="100" value="2000" data-format="fixed0" />
+            <span class="slider-value">2000</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Insert Dist</span>
+            <input type="range" min="1" max="20" step="0.5" value="5" data-format="fixed1" />
+            <span class="slider-value">5.0</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="dg-style">
+          <span class="section-title">Style</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-dg-style" style="gap:10px">
+          <div class="slider-row">
+            <span class="slider-label">Line Width</span>
+            <input type="range" min="0.1" max="8" step="0.1" value="1.5" data-format="fixed1" />
+            <span class="slider-value">1.5</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" min="0.05" max="1" step="0.01" value="1.0" data-format="fixed2" />
+            <span class="slider-value">1.00</span>
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Color</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /differential-growth -->
+
+
+    <!-- ══════════════════════════════════
+         LIMITED AGGREGATION
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-limited-aggregation">
+
+      <div>
+        <button class="section-btn" data-section-toggle="la-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-la-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="la-seed-val">9173</span>
+            <button class="btn-seed" data-seed-target="la-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Particles</span>
+            <input type="range" min="100" max="10000" step="100" value="3000" data-format="fixed0" />
+            <span class="slider-value">3000</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Stickiness</span>
+            <input type="range" min="0.1" max="1.0" step="0.01" value="1.0" data-format="fixed2" />
+            <span class="slider-value">1.00</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Radius</span>
+            <input type="range" min="0.5" max="10" step="0.5" value="2" data-format="fixed1" />
+            <span class="slider-value">2.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Walk Speed</span>
+            <input type="range" min="1" max="20" step="1" value="5" data-format="fixed0" />
+            <span class="slider-value">5</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Batch Size</span>
+            <input type="range" min="1" max="50" step="1" value="10" data-format="fixed0" />
+            <span class="slider-value">10</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="la-color">
+          <span class="section-title">Color</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-la-color" style="gap:10px">
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Mode</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="la-color-mode">Mono</button>
+              <button class="pill" data-group="la-color-mode">Gradient</button>
+              <button class="pill" data-group="la-color-mode">Heat</button>
+            </div>
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Color</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /limited-aggregation -->
+
+
+    <!-- ══════════════════════════════════
+         SPACE COLONIZATION
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-space-colonization">
+
+      <div>
+        <button class="section-btn" data-section-toggle="sc-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-sc-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="sc-seed-val">3361</span>
+            <button class="btn-seed" data-seed-target="sc-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Attractors</span>
+            <input type="range" min="1000" max="50000" step="500" value="30000" data-format="fixed0" />
+            <span class="slider-value">30000</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Seg Length</span>
+            <input type="range" min="0.5" max="10" step="0.5" value="1.5" data-format="fixed1" />
+            <span class="slider-value">1.5</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Infl Radius</span>
+            <input type="range" min="3" max="60" step="1" value="12" data-format="fixed0" />
+            <span class="slider-value">12</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Kill Radius</span>
+            <input type="range" min="0.5" max="10" step="0.5" value="2" data-format="fixed1" />
+            <span class="slider-value">2.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Max Thick</span>
+            <input type="range" min="0.5" max="10" step="0.5" value="5" data-format="fixed1" />
+            <span class="slider-value">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Min Thick</span>
+            <input type="range" min="0.1" max="3" step="0.1" value="1.0" data-format="fixed1" />
+            <span class="slider-value">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Overflow</span>
+            <input type="range" min="0" max="50" step="1" value="15" data-format="fixed0" />
+            <span class="slider-value">15</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Root Density</span>
+            <input type="range" min="1" max="10" step="1" value="5" data-format="fixed0" />
+            <span class="slider-value">5</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="sc-style">
+          <span class="section-title">Style</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-sc-style" style="gap:10px">
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Branch</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Leaf</span>
+            <input type="color" value="#4ade80" />
+            <input class="input-text" value="#4ade80" />
+            <label style="display:flex;align-items:center;gap:4px;margin-left:6px;cursor:pointer">
+              <input type="checkbox" id="sc-show-leaf" checked />
+              <span class="sub-label-sm" style="min-width:0">On</span>
+            </label>
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Shape</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="sc-shape">Open</button>
+              <button class="pill" data-group="sc-shape">Filled</button>
+              <button class="pill" data-group="sc-shape">Radial</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /space-colonization -->
+
+
+    <!-- ══════════════════════════════════
+         VORONOI
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-voronoi">
+
+      <div>
+        <button class="section-btn" data-section-toggle="v-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-v-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="v-seed-val">5512</span>
+            <button class="btn-seed" data-seed-target="v-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Points</span>
+            <input type="range" min="5" max="500" step="5" value="80" data-format="fixed0" />
+            <span class="slider-value">80</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Relaxation</span>
+            <input type="range" min="0" max="30" step="1" value="3" data-format="fixed0" />
+            <span class="slider-value">3</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Line Weight</span>
+            <input type="range" min="0.1" max="5" step="0.1" value="1.0" data-format="fixed1" />
+            <span class="slider-value">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Point Size</span>
+            <input type="range" min="0" max="10" step="0.5" value="2" data-format="fixed1" />
+            <span class="slider-value">2.0</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="v-color">
+          <span class="section-title">Color</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-v-color" style="gap:10px">
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Fill Mode</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="v-fill">Flat</button>
+              <button class="pill" data-group="v-fill">Gradient</button>
+              <button class="pill" data-group="v-fill">Random</button>
+              <button class="pill" data-group="v-fill">None</button>
+            </div>
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Fill</span>
+            <input type="color" value="#1a1a2e" />
+            <input class="input-text" value="#1a1a2e" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:44px;flex-shrink:0">Stroke</span>
+            <input type="color" value="#ffffff" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /voronoi -->
+
+    <div class="sidebar-spacer"></div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       BOTTOM HUD
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="hud">
+    <!-- Undo -->
+    <button class="hud-btn disabled" id="hud-undo" title="Undo (&#8984;Z)">&#8634;</button>
+    <!-- Redo -->
+    <button class="hud-btn disabled" id="hud-redo" title="Redo (&#8984;&#8679;Z)">&#8635;</button>
+
+    <div class="hud-divider"></div>
+
+    <!-- Reset -->
+    <button class="hud-btn" id="hud-reset" title="Reset to default">&#10227;</button>
+
+    <!-- Play / Pause -->
+    <button class="hud-pill active" id="hud-play">&#9208;</button>
+
+    <!-- Speed -->
+    <div class="hud-speed">
+      <input type="range" id="speed-slider" min="0.2" max="3" step="0.1" value="1.0" />
+      <span class="hud-speed-label" id="speed-label">1.0&times;</span>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- Export -->
+    <button class="hud-pill" id="hud-export-png">PNG</button>
+    <button class="hud-pill" id="hud-export-svg">SVG</button>
+    <button class="hud-pill" id="hud-export-mp4">MP4</button>
+  </div>
+
+  <!-- ── Dark / Light Toggle ── -->
+  <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+    <!-- JS will inject SVG -->
+  </button>
+
+</div>
+
+<!-- Effect modules (각 이펙트 독립 파일 — 병렬 작업 가능) -->
+<script src="effects/effect-base.js"></script>
+<script src="effects/reaction-diffusion.js"></script>
+<script src="effects/cellular-automata.js"></script>
+<script src="effects/differential-growth.js"></script>
+<script src="effects/limited-aggregation.js"></script>
+<script src="effects/space-colonization.js"></script>
+<script src="effects/voronoi.js"></script>
+
+<!-- Main UI (공통 UI 로직 — 이펙트와 독립) -->
+<script src="script.js"></script>
+</body>
+</html>

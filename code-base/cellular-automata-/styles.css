@@ -1,0 +1,879 @@
+:root {
+  --border-color: rgba(255, 255, 255, .3);
+  --border-color--alt: rgba(255, 255, 255, .2);
+  --border-color--active: rgba(255, 255, 255, .8);
+  --ui-animation-time: .2s;
+  --panel-width: 290px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body {
+  background: radial-gradient(circle, rgb(10,10,10) 20%, rgb(20,20,20) 100%);
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+  overflow: hidden;
+}
+
+main {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  display: block;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+/****************************
+  Canvas keyboard controls
+*****************************/
+#canvas-wrapper {
+  position: relative;
+  z-index: 0;
+}
+
+  #canvas-wrapper canvas:focus {
+    outline-offset: 4px;
+  }
+
+/****************************
+  UI
+*****************************/
+/** Panels are the highest-level wrapper. */
+.panel {
+  position: absolute;
+  top: 0;
+  width: var(--panel-width);
+  height: 100%;
+  z-index: 100;
+  overflow-y: auto;
+  padding-top: 10px;
+
+  color: white;
+  background-color: rgba(0,0,0,.95);
+  box-shadow: 0 0 10px 3px rgba(0,0,0,.4);
+
+  transition: left var(--ui-animation-time) linear,
+              right var(--ui-animation-time) linear;
+}
+
+  .panel.is-docked-left  { left: 0;  border-right: 1px solid var(--border-color); }
+  .panel.is-docked-right { right: 0; border-left: 1px solid var(--border-color);  }
+
+  .panel.is-docked-left.is-offscreen { left: calc(var(--panel-width) * -1); }
+  .panel.panel.is-docked-right.is-offscreen { right: calc(var(--panel-width) * -1); }
+
+
+  /** Groups are sets of components with a heading at the top. */
+  .panel .group {
+    padding-bottom: 25px;
+  }
+
+    .panel .group.is-collapsed {
+      padding-bottom: 0px;
+    }
+
+    .panel .group .heading {}
+
+      .panel .group .heading button {
+        display: block;
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 8px 15px 9px 15px;
+
+        text-align: left;
+        font-size: 14px;
+        font-weight: 700;
+        color: rgba(255,255,255,1);
+
+        background-color: black;
+        background: linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(0,0,0,0) 80%);
+
+        border: 0;
+        border-top: 1px solid rgba(255,255,255,.22);
+        border-bottom: 1px solid rgba(255,255,255,.15);
+
+        cursor: pointer;
+      }
+
+        .panel .group .heading button[aria-expanded="false"] {
+          margin-bottom: 2px;
+        }
+
+        .panel .group .heading button:hover,
+        .panel .group .heading button:focus {
+          border-top-color: rgba(255, 255, 255, .65);
+          border-bottom-color: rgba(255, 255, 255, .6);
+          background: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(0,0,0,0) 80%);
+        }
+
+          .panel .group .heading button:focus {
+            outline-offset: -2px;
+          }
+
+        /** Caret icon */
+        .panel .group .heading button span {
+          float: right;
+          opacity: .6;
+        }
+
+        .panel .group .heading button[aria-expanded="true"] span {
+          transform: rotate(180deg);
+        }
+
+  /** <hr>s are used as seperators between Components */
+  .panel hr {
+    border-bottom: 1px solid var(--border-color--alt);
+    margin: 10px 15px;
+  }
+
+  /** Rows are <div>s used for laying out components horizontally */
+  .panel .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    margin-top: 15px;
+    padding: 3px 15px;
+  }
+
+    .panel .row .component {
+      flex: 0 0 calc(50% - 5px);
+      padding: 0;
+    }
+
+  /** Components are individual controls (sliders, dropdowns, etc). */
+  .panel .component {
+    font-size: 12px;
+    color: rgba(255,255,255,.7);
+    padding: 3px 15px;
+    width: 100%;
+
+    display: flex;
+    align-items: flex-start;
+  }
+
+    .panel .component.is-indented:before {
+      content: '';
+      display: block;
+      flex: 0 0 35%;
+    }
+
+    /** <label> tag */
+    .panel .component label {
+      flex: 0 0 35%;
+    }
+
+    /** <select> dropdowns */
+    .panel .dropdown label {
+      padding-top: 4px;
+    }
+
+      .panel .dropdown select {
+        flex: 1 1 auto;
+        background-color: rgb(255,255,255,.1);
+        color: rgba(255,255,255,.7);
+        padding: 5px;
+        max-width: calc(100% - 84px);
+        font-size: 12px;
+        border: 1px solid var(--border-color);
+      }
+
+        .panel .dropdown select optgroup {
+          background-color: rgb(50,50,50);
+        }
+
+        .panel .dropdown select option {
+          background-color: rgba(0,0,0,.8);
+          color: rgba(255,255,255,.7);
+        }
+
+        .panel .dropdown select:hover,
+        .panel .dropdown select:focus {
+          border: 1px solid var(--border-color--active);
+          color: rgba(255,255,255,1);
+        }
+
+        .panel .dropdown select:focus {
+          outline-offset: 3px;
+        }
+
+    /** Sliders (<input type="range" ...>) */
+    .panel .slider input[type="range"] {
+      flex: 1 1 auto;
+      width: 100%;
+      margin-top: 5px;
+      margin-right: 10px;
+      position: relative;
+      background-color: transparent;
+      -webkit-appearance: none;
+    }
+
+      .panel .slider input[type="range"][disabled] {
+        opacity: .4;
+        cursor: not-allowed;
+      }
+
+      .panel .slider input[type="range"]:before {
+        position: absolute;
+        top: 4px;
+
+        content: '';
+        display: block;
+        width: 100%;
+        height: 1px;
+        background-color: var(--border-color);
+      }
+
+        .panel .slider input[type="range"]:not([disabled]):hover:before,
+        .panel .slider input[type="range"]:not([disabled]):focus:before {
+          background-color: var(--border-color--active);
+        }
+
+      .panel .slider input[type=range]::-webkit-slider-runnable-track {
+        background: transparent;
+        border: 0;
+        width: 100%;
+      }
+
+      .panel .slider input[type=range]::-webkit-slider-thumb {
+        width: 10px;
+        height: 10px;
+        background: #ffffff;
+        -webkit-appearance: none;
+      }
+
+      .panel .slider input[type=range]::-moz-range-track {
+        background: transparent;
+        border: 0;
+        width: 100%;
+      }
+
+      .panel .slider input[type=range]::-moz-range-thumb {
+        width: 10px;
+        height: 10px;
+        background: #ffffff;
+      }
+
+      .panel .slider input[type=range]::-ms-track {
+        background: transparent;
+        border: 0;
+        width: 100%;
+      }
+
+      .panel .slider input[type=range]::-ms-fill-lower {
+        background: transparent;
+        border: 0;
+      }
+
+      .panel .slider input[type=range]::-ms-fill-upper {
+        background: transparent;
+        border: 0;
+      }
+
+      .panel .slider input[type=range]::-ms-thumb {
+        width: 10px;
+        height: 10px;
+        background: #ffffff;
+        margin-top: 0px;
+        /*Needed to keep the Edge thumb centred*/
+      }
+
+      .panel .slider input[type=range]:focus {
+        outline-offset: 3px;
+      }
+
+    /** Text field with value of component. */
+    .panel .slider .value {
+      flex: 1 0 15%;
+      width: 100%;
+      padding: 2px;
+      background-color: rgba(255,255,255,.1);
+      border: 1px solid var(--border-color);
+      color: rgba(255,255,255,.7);
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+      .panel .slider .value[disabled] {
+        opacity: .5;
+        cursor: not-allowed;
+      }
+
+      .panel .slider .value:not([disabled]):hover,
+      .panel .slider .value:not([disabled]):focus {
+        border: 1px solid var(--border-color--active);
+        color: rgba(255,255,255,1);
+      }
+
+      .panel .slider .value:focus {
+        outline-offset: 3px;
+      }
+
+    /** Buttons */
+    .panel .button button {
+      padding: 8px 12px;
+      border-radius: 3px;
+      background-color: rgb(255,255,255,.1);
+      border: 1px solid var(--border-color);
+      color: rgba(255,255,255,.7);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+      .panel .button button:hover,
+      .panel .button button:focus {
+        border: 1px solid var(--border-color--active);
+        color: rgba(255,255,255,1);
+      }
+
+      .panel .button button:focus {
+        outline-offset: 3px;
+      }
+
+    /** Checkboxes */
+    .panel .checkbox input + .custom-checkbox {
+      position: relative;
+      content: '';
+      width: 14px;
+      height: 14px;
+
+      background-color: black;
+      border: 1px solid var(--border-color);
+    }
+
+      .panel .checkbox input:checked + .custom-checkbox {
+        background-color: white;
+      }
+
+      .panel .checkbox input:checked + .custom-checkbox:after {
+        position: absolute;
+        left: 1px;
+        top: 2px;
+
+        content: '';
+        width: 8px;
+        height: 4px;
+        margin-right: 8px;
+
+        border-left: 2px solid black;
+        border-bottom: 2px solid black;
+
+        transform: rotate(-45deg);
+      }
+
+      .panel .checkbox:hover .custom-checkbox,
+      .panel .checkbox input:focus + .custom-checkbox {
+        border: 1px solid var(--border-color--active);
+      }
+
+      .panel .checkbox input:focus + .custom-checkbox {
+        outline: 5px auto Highlight;
+        outline: 5px auto -webkit-focus-ring-color;
+        outline-offset: 3px;
+      }
+
+    /** Color picker */
+    .panel .color-picker {
+      align-items: center;
+    }
+
+      .panel .color-picker input:focus {
+        outline-offset: 3px;
+      }
+
+    /** Text input */
+    .panel .text-input {
+      align-items: center;
+    }
+
+      .panel .text-input input {
+        width: 100%;
+        padding: 5px 10px;
+        background-color: rgba(255,255,255,.1);
+        border: 1px solid var(--border-color);
+        color: rgba(255,255,255,.7);
+        font-family: 'Courier New', Courier, monospace;
+      }
+
+        .panel .text-input input:hover,
+        .panel .text-input input:focus {
+          border: 1px solid var(--border-color--active);
+          color: rgba(255,255,255,1);
+        }
+
+        .panel .text-input input:focus {
+          outline-offset: 3px;
+        }
+
+    /** Textarea */
+    .panel .textarea {}
+
+      .panel .textarea textarea {
+        width: 100%;
+        padding: 5px 10px;
+        background-color: rgba(255,255,255,.1);
+        border: 1px solid var(--border-color);
+        color: rgba(255,255,255,.7);
+        font-family: 'Courier New', Courier, monospace;
+      }
+
+        .panel .textarea textarea:hover,
+        .panel .textarea textarea:focus {
+          border: 1px solid var(--border-color--active);
+          color: rgba(255,255,255,1);
+        }
+
+        .panel .textarea textarea:focus {
+          outline-offset: 3px;
+        }
+
+    /** Set of checkboxes for birth/survival counts */
+    .panel .count-fieldset {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin: 0 15px;
+    }
+
+      .panel .count-fieldset label {
+        flex: 0 0 calc(100% / 9);
+        padding: 6px 0 10px 0;
+        text-align: center;
+
+        border-radius: 2px;
+        font-size: 12px;
+        color: rgba(255,255,255,.8);
+      }
+
+        .panel .count-fieldset label:hover,
+        .panel .count-fieldset label:focus-within {
+          background-color: rgba(255,255,255,.05);
+          color: white;
+        }
+
+        .panel .count-fieldset label .custom-checkbox {
+          margin-bottom: 2px;
+          display: inline-block;
+        }
+
+    /** Scrollable sections containing a variable of components. */
+    .panel .is-scrollable {
+      max-height: 150px;
+      overflow-y: scroll;
+
+      scrollbar-width: 5px;
+      scrollbar-color: transparent rgba(255,255,255,.1);
+    }
+
+      .panel .is-scrollable::-webkit-scrollbar {
+        width: 5px;
+        margin-left: 10px;
+      }
+
+      .panel .is-scrollable::-webkit-scrollbar-track {
+        background-color: rgb(255,255,255,.0);
+        border-radius: 100px;
+      }
+
+      .panel .is-scrollable::-webkit-scrollbar-thumb {
+        background-color: rgb(255,255,255,.7);
+        border-radius: 10px;
+      }
+
+  /** Special styling for the Pause/Play and Restart buttons in the Controls section */
+  .panel .component.button.is-control-button button {
+    width: 100%;
+    background: rgba(255, 255, 255, .05);
+    border: 0;
+    text-align: center;
+    padding: 15px;
+  }
+
+    .panel .component.button.is-control-button button .fas {
+      display: block;
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+
+      .panel .component.button.is-control-button button[aria-pressed="false"] .fas.fa-play,
+      .panel .component.button.is-control-button button[aria-pressed="false"] .text.play { display: none; }
+
+      .panel .component.button.is-control-button button[aria-pressed="true"] .fas.fa-pause,
+      .panel .component.button.is-control-button button[aria-pressed="true"] .text.pause { display: none; }
+
+    .panel .component.button.is-control-button button:hover .text,
+    .panel .component.button.is-control-button button:focus .text {
+      text-decoration: underline;
+    }
+
+  /** Text display components just show a string and a value with no interactive elements. */
+  .panel .text-display {
+    font-weight: bold;
+    opacity: .9;
+  }
+
+    .panel .text-display .value {
+      margin-left: 5px;
+      font-weight: normal;
+    }
+
+/** Step controls row below Pause and Restart buttons in the Controls group */
+.step-controls-row {
+  justify-content: space-between;
+}
+
+  .step-controls-row .button button {
+    border: 0;
+    padding: 6px;
+    background: none;
+  }
+
+    /** +1/10/100 buttons on the left */
+    .step-controls-row .step-numbers {
+      flex: 0 1 55%;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border: 1px solid var(--border-color);
+      padding: 0 10px;
+      height: 30px;
+    }
+
+      .step-controls-row .step-numbers .button {
+        flex: 1 1 auto;
+      }
+
+        .step-controls-row .step-numbers .button button {
+          vertical-align: middle;
+          width: 100%;
+        }
+
+          .step-controls-row .step-numbers .button button:hover,
+          .step-controls-row .step-numbers .button button:focus {
+            border: 0;
+            background-color: rgba(255,255,255,.1);
+          }
+
+    /** Text input and Run button on the right */
+    .step-controls-row .custom-steps {}
+
+      /** Number of steps text field */
+      .step-controls-row .custom-steps .text-input {
+        display: inline;
+      }
+
+        .step-controls-row .custom-steps .text-input input {
+          width: 55px;
+          height: 30px;
+          margin-left: 10px;
+          border-color: var(--border-color);
+        }
+
+      /** Run button */
+      .step-controls-row .custom-steps .button {
+        display: inline;
+      }
+
+        .step-controls-row .custom-steps .button button {
+          background-color: rgba(255,255,255,.05);
+          border: 1px solid var(--border-color);
+          border-left: 0;
+          border-radius: 0;
+          height: 30px;
+          vertical-align: middle;
+          padding: 0 10px;
+        }
+
+.swap-button {
+  background: none;
+  color: white;
+}
+
+/** Center buttons and links */
+.center-controls {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 100;
+  transition: left var(--ui-animation-time) linear;
+}
+
+  .center-controls.has-left-indent {
+    left: calc( var(--panel-width) + 20px);
+  }
+
+  .center-controls .toggle-ui-button {
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--border-color);
+    padding: 5px 15px;
+    border-radius: 100px;
+    color: rgb(255,255,255,.7);
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
+    .center-controls .toggle-ui-button:hover,
+    .center-controls .toggle-ui-button:focus {
+      background: black;
+      border-color: var(--border-color--active);
+      color: white;
+    }
+
+    .center-controls .toggle-ui-button:focus {
+      outline-offset: 4px;
+    }
+
+    .center-controls .toggle-ui-button .fas { margin-right: 5px; }
+
+    .center-controls .toggle-ui-button[aria-pressed="false"] .fas.fa-eye,
+    .center-controls .toggle-ui-button[aria-pressed="false"] .show { display: none; }
+
+    .center-controls .toggle-ui-button[aria-pressed="true"] .fas.fa-eye-slash,
+    .center-controls .toggle-ui-button[aria-pressed="true"] .hide { display: none;}
+
+  .center-controls .about-button {
+    display: inline-block;
+    width: 27px;
+    height: 27px;
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--border-color);
+    border-radius: 100px;
+    color:rgba(255, 255, 255, .7);
+    font-size: 12px;
+    cursor: pointer;
+    margin: 0 10px;
+    padding: 0;
+  }
+
+    .center-controls .about-button:hover,
+    .center-controls .about-button:focus {
+      background: black;
+      border-color: var(--border-color--active);
+    }
+
+    .center-controls .about-button:focus {
+      outline-offset: 4px;
+    }
+
+  .center-controls .github-link {
+    color: rgba(255, 255, 255, .7);
+    font-size: 27px;
+    vertical-align: middle;
+    padding: 0;
+    margin: 0;
+  }
+
+    .center-controls .about-button:hover,
+    .center-controls .about-button:focus,
+    .center-controls .github-link:hover,
+    .center-controls .github-link:focus {
+      color: white;
+    }
+
+/*******************
+  Modal dialogs
+********************/
+.dialog {
+  display: none;
+
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 200;
+  background-color: rgba(0,0,0,.7);
+
+  justify-content: center;
+  align-items: center;
+}
+
+  .dialog.is-visible {
+    display: flex;
+  }
+
+  .dialog .content {
+    position: relative;
+    padding: 20px 30px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: scroll;
+
+    background-color: black;
+    color: rgba(255,255,255,.8);
+  }
+
+    .dialog .content .close-button {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+
+      background: none;
+      border: 0;
+      padding: 0;
+
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      opacity: .6;
+    }
+
+    .dialog .content .close-button:hover,
+    .dialog .content .close-button:focus {
+      opacity: 1;
+      outline-offset: 2px;
+    }
+
+    .dialog .content h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+
+    .dialog .content a {
+      color: white;
+      font-weight: bold;
+      text-decoration: underline;
+    }
+
+  /** Seizure warning dialog ****************/
+  #seizure-warning-dialog .content {
+    max-width: 550px;
+  }
+
+  #seizure-warning-dialog h1 {
+    color: rgb(255,50,50);
+    text-align: center;
+    font-size: 28px;
+  }
+
+  #seizure-warning-dialog p {
+    margin: 20px 0;
+    color: rgb(255,255,255,.7);
+    line-height: 24px;
+  }
+
+  #seizure-warning-dialog button {
+    background: none;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    color: white;
+    padding: 10px 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+    #seizure-warning-dialog button:hover,
+    #seizure-warning-dialog button:focus {
+      background-color: white;
+      color: black;
+      font-weight: bold;
+      border-color: white;
+      outline-offset: 4px;
+    }
+
+  #seizure-warning-dialog label {
+    margin-left: 20px;
+  }
+
+    #seizure-warning-dialog label input {
+      vertical-align: middle;
+    }
+
+    #seizure-warning-dialog label span {
+      margin-left: 5px;
+      font-size: 14px;
+      opacity: .7;
+      vertical-align: middle;
+    }
+
+  /** About dialog *******************/
+  #about-dialog .content {
+    font-size: 14px;
+    color:rgba(255, 255, 255, .7);
+  }
+
+  #about-dialog .content h1 {
+    font-size: 22px;
+    margin-bottom: 15px;
+    color: white;
+  }
+
+  #about-dialog .content p {
+    line-height: 20px;
+    margin-bottom: 20px;
+  }
+
+  #about-dialog .content b {
+    color: white;
+  }
+
+  #about-dialog .content .row {
+    display: flex;
+    justify-content: space-between;
+    margin: 20px 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+    #about-dialog .content .row > div {
+      flex: 0 0 48%;
+      padding: 15px 5px;
+    }
+
+      #about-dialog .content .row > div:first-of-type {
+        border-right: 1px solid var(--border-color);
+        padding-right: 20px;
+      }
+
+    #about-dialog .content h2 {
+      margin-bottom: 10px;
+      font-size: 16px;
+      text-decoration: underline;
+      color: white;
+    }
+
+    #about-dialog .content ul {
+      margin-left: 20px;
+    }
+
+      #about-dialog .content ul li {
+        padding-left: 5px;
+        margin-bottom: 10px;
+      }
+
+        #about-dialog .content ul li code {
+          font-weight: bold;
+          font-family: 'Courier New', Courier, monospace;
+          background-color: rgba(255,255,255,.1);
+          color: white;
+          padding: 3px 7px;
+        }
+
+        #about-dialog .content ul li ul {
+          margin-top: 8px;
+        }
+
+          #about-dialog .content ul li ul li {
+            margin: 4px 0;
+          }
+
+  #about-dialog .content .credits {
+    margin: 20px -10px 0 -10px;
+    padding: 20px;
+    background-color: rgba(255,255,255,.05);
+  }

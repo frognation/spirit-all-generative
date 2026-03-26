@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-M8NH66GQTX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-M8NH66GQTX');
+  </script>
+
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <title>Reaction-Diffusion Playground</title>
+
+  <meta name="description" content="Interactive simulation with organic patterns and behaviors emerging naturally from two chemicals as they are mixed together.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Facebook OG -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jasonwebb.github.io/reaction-diffusion-playground/">
+  <meta property="og:title" content="Reaction-Diffusion Playground">
+  <meta property="og:image" content="https://raw.githubusercontent.com/jasonwebb/reaction-diffusion-playground/master/images/social-media-preview.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="628">
+  <meta property="og:description" content="Interactive simulation with organic patterns and behaviors emerging naturally from two chemicals as they are mixed together.">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:creator" content="@jasonwebb">
+  <meta name="twitter:title" content="Reaction-Diffusion Playground">
+  <meta name="twitter:description" content="Interactive simulation with organic patterns and behaviors emerging naturally from two chemicals as they are mixed together.">
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/jasonwebb/reaction-diffusion-playground/master/images/social-media-preview.jpg">
+
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="css/map-dialog.css">
+  <link rel="stylesheet" href="css/corner-links.css">
+  <link rel="stylesheet" href="css/stats.css">
+  <link rel="stylesheet" href="css/effects-panel.css">
+
+  <style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    background: radial-gradient(circle, rgb(10,10,10) 20%, rgb(20,20,20) 100%);
+  }
+
+  .tp-dfwv { width: 350px !important; }
+  .tp-lblv_v { width: 250px !important; }
+
+  canvas { display: block; }
+  </style>
+</head>
+
+<body>
+  <!-- Container that the main ThreeJS canvas gets injected into. -->
+  <div id="container"></div>
+
+  <!-- Dialog popup containing parameter map. Bring it up using the "Pick parameter values from map" button on the right pane. -->
+  <div id="map-dialog" role="dialog" aria-modal="true" aria-label="Parameter map">
+    <div class="inner-panel">
+      <div class="title">Click anywhere on the map to set feed and kill rate values</div>
+      <button class="close-button" title="Close">
+        <span class="fa fa-times" aria-hidden="true"></span>
+        <span class="sr-only">Close</span>
+      </button>
+
+      <div class="image-container">
+        <img src="./images/karl-sims-parameter-map.png" alt="">
+      </div>
+    </div>
+  </div>
+
+  <!-- Github and other links in the bottom left corner. -->
+  <div class="corner-links">
+    <a href="https://github.com/jasonwebb/reaction-diffusion-playground" target="_blank" class="github-link" title="Github repo">
+      <span class="fa fa-github" aria-hidden="true"></span>
+      <span class="sr-only">Github repo</span>
+    </a>
+
+    <!-- Export as SVG button -->
+    <a href="#" id="export-svg" class="github-link" title="Export as SVG">
+      <span class="fa fa-download" aria-hidden="true"></span>
+      <span class="sr-only">Export as SVG</span>
+    </a>
+  </div>
+
+  <!-- Hidden canvas and image used to copy image pixel data into the main canvas. -->
+  <canvas id="buffer-canvas" style="display: none;"></canvas>
+  <img id="buffer-image" style="display: none;">
+
+  <!-- Visually-hidden file chooser used to load a local image for use as a style map. -->
+  <input type="file" id="style-map-chooser" accept="image/*" class="sr-only">
+
+  <!-- Visually-hidden file chooser for loading custom seed image. -->
+  <input type="file" id="seed-image-chooser" accept="image/*" class="sr-only">
+
+  <script src="dist/main.bundle.js"></script>
+
+  <!-- ImageTracer.js only -->
+  <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
+
+  <script>
+    // Smooth SVG export (upscale + blur prefilter)
+    window.addEventListener('load', function () {
+      var btn = document.getElementById('export-svg');
+      if (!btn) return;
+
+      var bufferCanvas = document.getElementById('buffer-canvas');
+      if (!bufferCanvas) return;
+      var bufferCtx = bufferCanvas.getContext('2d');
+
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        var glCanvas = document.querySelector('#container canvas');
+        if (!glCanvas || !bufferCtx) {
+          alert('Canvas not ready.');
+          return;
+        }
+
+        // 고품질 전처리: 업스케일 + 약한 블러
+        var scaleUp = 4;   // 더 부드럽게 하려면 4
+        var blurPx  = 1.0; // 0.8~1.2 권장
+        bufferCanvas.width  = glCanvas.width  * scaleUp;
+        bufferCanvas.height = glCanvas.height * scaleUp;
+
+        try {
+          bufferCtx.imageSmoothingEnabled = true;
+          bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+          bufferCtx.filter = 'blur(' + blurPx + 'px)';
+          bufferCtx.drawImage(glCanvas, 0, 0, bufferCanvas.width, bufferCanvas.height);
+          bufferCtx.filter = 'none';
+
+          var imgData = bufferCtx.getImageData(0, 0, bufferCanvas.width, bufferCanvas.height);
+
+          if (typeof ImageTracer === 'undefined') {
+            alert('Failed to load ImageTracer.');
+            return;
+          }
+
+          // 4단계 회색 팔레트 강제(일러에서 Recolor로 교체 용이)
+          var options = {
+            numberofcolors: 4,
+            colorsampling: 0, // 고정 팔레트 사용
+            palette: [
+              { r:  20, g:  20, b:  20, a:255 },
+              { r: 100, g: 100, b: 100, a:255 },
+              { r: 170, g: 170, b: 170, a:255 },
+              { r: 245, g: 245, b: 245, a:255 }
+            ],
+            colorquantcycles: 3,
+
+            // 곡선 부드럽게(단순화↑), 잡음 제거
+            ltres: 4,   // 직선 단순화
+            qtres: 4,   // 곡선 단순화
+            pathomit: 6,
+            roundcoords: 2,
+            linefilter: true,
+
+            // 캔버스에서 블러를 했으므로 0
+            blurradius: 0,
+            blurdelta: 0,
+
+            strokewidth: 0,
+            scale: 1
+          };
+
+          var svgString = ImageTracer.imagedataToSVG(imgData, options);
+
+          // 다운로드
+          var blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          var ts = new Date().toISOString().replace(/[:.]/g, '-');
+          a.href = url;
+          a.download = 'reaction-diffusion-smooth-' + ts + '.svg';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error(err);
+          alert('Failed to export SVG.');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
