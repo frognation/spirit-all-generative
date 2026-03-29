@@ -175,8 +175,10 @@ html, body { height: 100%; font-family: ui-monospace, "SF Mono", "Cascadia Code"
 #main-canvas {
   display: block;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 12px 48px rgba(0,0,0,0.7);
-  max-width: calc(100% - 48px);
-  max-height: calc(100% - 48px);
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 32px);
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
 }
 [data-theme="light"] #main-canvas {
   box-shadow: 0 0 0 1px rgba(0,0,0,0.1), 0 8px 32px rgba(0,0,0,0.18);
@@ -730,6 +732,117 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
 }
 .theme-toggle:hover { opacity: 0.8; }
 .theme-toggle svg { width: 13px; height: 13px; }
+
+/* ── Canvas Toolbar ────────────────────────────────────────────────────── */
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--effect-tab-bg);
+}
+.canvas-tool-group { display: flex; gap: 2px; }
+.canvas-tool {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: inherit;
+}
+.canvas-tool:hover { color: var(--text-secondary); background: var(--surface-hover); }
+.canvas-tool.active {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue-border);
+  background: var(--accent-blue-bg);
+}
+.canvas-tool-divider {
+  width: 1px; height: 18px;
+  background: var(--border-light);
+  margin: 0 2px;
+}
+.canvas-tool-slider {
+  display: flex; align-items: center; gap: 6px;
+}
+.canvas-tool-slider input[type="range"] { width: 70px; }
+.canvas-tool-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-tertiary); white-space: nowrap;
+}
+.canvas-tool-value {
+  font-size: 9px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums; min-width: 22px;
+}
+
+/* ── Brush Cursor ──────────────────────────────────────────────────────── */
+.brush-cursor {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid rgba(255,255,255,0.5);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: none;
+  mix-blend-mode: difference;
+}
+.canvas-viewport:hover .brush-cursor { display: block; }
+
+/* ── Resolution Row ────────────────────────────────────────────────────── */
+.res-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.res-input {
+  flex: 1;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-input-border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 6px;
+  text-align: center;
+  outline: none;
+  width: 0; /* flex handles actual width */
+  transition: border-color 0.15s;
+  -moz-appearance: textfield;
+}
+.res-input::-webkit-inner-spin-button,
+.res-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.res-input:focus { border-color: var(--accent-blue-border); }
+.res-x {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* ── Toggle Label (checkbox + text) ────────────────────────────────────── */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.toggle-label input[type="checkbox"] {
+  accent-color: var(--accent-blue);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
 
 /* ── Hidden ────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }

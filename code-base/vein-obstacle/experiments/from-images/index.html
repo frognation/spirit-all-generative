@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6YTG4SPZ6V"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-6YTG4SPZ6V');
+  </script>
+
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+
+  <title>Images</title>
+
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="stylesheet" type="text/css" href="../../sketch-styles.css">
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace; -webkit-font-smoothing: antialiased; background: #000; overflow: hidden; }
+
+    canvas { display: block; position: absolute; inset: 0; right: 272px; }
+
+    /* ── Sidebar ── */
+    #controls-sidebar {
+      position: fixed;
+      top: 0; right: 0;
+      height: 100%;
+      width: 272px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      background: rgba(7,7,7,0.97);
+      border-left: 1px solid rgba(255,255,255,0.07);
+      z-index: 100;
+    }
+    #controls-sidebar::-webkit-scrollbar { width: 4px; }
+    #controls-sidebar::-webkit-scrollbar-track { background: transparent; }
+    #controls-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
+
+    .sidebar-header { padding: 20px 16px 16px; }
+    .sidebar-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.22em; color: rgba(255,255,255,0.85); }
+    .sidebar-version { font-size: 10px; letter-spacing: 0.12em; margin-top: 4px; color: rgba(255,255,255,0.25); }
+
+    .divider { margin: 0 16px; border: none; border-top: 1px solid rgba(255,255,255,0.07); }
+
+    /* ── Section ── */
+    .section-btn {
+      width: 100%;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      text-align: left; background: none; border: none;
+      color: inherit; cursor: pointer; font-family: inherit;
+      transition: background 0.15s;
+    }
+    .section-btn:hover { background: rgba(255,255,255,0.025); }
+    .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; color: rgba(255,255,255,0.45); }
+    .section-chevron { font-size: 14px; line-height: 1; color: rgba(255,255,255,0.25); }
+    .section-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .section-body.hidden { display: none; }
+
+    /* ── Slider Row ── */
+    .slider-row { display: flex; align-items: center; gap: 8px; }
+    .slider-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.45); flex-shrink: 0; min-width: 56px; }
+    .slider-row input[type="range"] { flex: 1; }
+    .slider-value { font-size: 9px; color: rgba(255,255,255,0.25); font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; flex-shrink: 0; }
+
+    /* ── Range Input ── */
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      height: 2px; background: rgba(255,255,255,0.12);
+      border-radius: 999px; outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #fff; cursor: pointer; border: none;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
+    }
+    input[type="range"]:hover { background: rgba(255,255,255,0.20); }
+
+    /* ── Mode Toggle ── */
+    .mode-toggle { display: flex; gap: 6px; }
+    .mode-btn {
+      flex: 1; padding: 8px 0;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      font-family: inherit;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; background: none;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .mode-btn:hover { border-color: rgba(255,255,255,0.30); }
+    .mode-btn.active { border-color: rgba(74,158,255,0.50); background: rgba(74,158,255,0.18); color: #fff; }
+
+    /* ── Toggle Row (Checkbox) ── */
+    .toggle-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer; padding: 2px 0;
+    }
+    .toggle-row input[type="checkbox"] {
+      -webkit-appearance: none; appearance: none;
+      width: 14px; height: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 3px; background: rgba(255,255,255,0.07);
+      cursor: pointer; position: relative; flex-shrink: 0;
+    }
+    .toggle-row input[type="checkbox"]:checked {
+      background: rgba(74,158,255,0.35);
+      border-color: rgba(74,158,255,0.60);
+    }
+    .toggle-row input[type="checkbox"]:checked::after {
+      content: '✓'; position: absolute;
+      top: -1px; left: 1px;
+      font-size: 11px; color: #fff;
+    }
+
+    /* ── Action Buttons ── */
+    .btn-action {
+      width: 100%; padding: 8px 0;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      font-family: inherit;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; background: none;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-action:hover { border-color: rgba(255,255,255,0.30); color: rgba(255,255,255,0.7); }
+    .btn-reset:hover { color: rgba(239,68,68,0.6); border-color: rgba(239,68,68,0.25); }
+
+    /* ── Info Card ── */
+    .info-card {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .info-card-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.25); }
+    .info-card-value { font-size: 10px; color: rgba(255,255,255,0.45); font-variant-numeric: tabular-nums; }
+  </style>
+
+  <!-- Facebook OG -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="">
+  <meta property="og:title" content="">
+  <meta property="og:image" content="">
+  <meta property="og:image:width" content="">
+  <meta property="og:image:height" content="">
+  <meta property="og:description" content="">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:creator" content="@jasonwebb">
+  <meta name="twitter:title" content="">
+  <meta name="twitter:description" content="">
+  <meta name="twitter:image" content="">
+</head>
+
+<body>
+  <canvas id="sketch"></canvas>
+  <script src="../../dist/images.bundle.js"></script>
+</body>
+</html>

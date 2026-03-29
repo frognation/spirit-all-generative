@@ -111,6 +111,16 @@ class EffectBase {
   /** Receive rendered input (text/SVG) as ImageData for effect seeding */
   setInputMask(imageData) { this._inputMask = imageData; }
 
+  /** Get shared brush size from toolbar (pixels on canvas) */
+  get brushSize() {
+    return parseInt(document.getElementById("brush-size")?.value || "20", 10);
+  }
+
+  /** Get current tool from toolbar ("brush" | "smudge") */
+  get currentTool() {
+    return document.querySelector('.canvas-tool[data-tool].active')?.getAttribute("data-tool") || "brush";
+  }
+
   /* ── Utility ───────────────────────────────────────────────────────────── */
 
   /** Simple seeded PRNG (mulberry32) */
@@ -123,6 +133,14 @@ class EffectBase {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
+
+  /**
+   * Export current state as SVG string.
+   * 벡터 출력 가능한 이펙트는 이 메서드를 오버라이드.
+   * Returns null if raster-only (fallback to canvas embed).
+   * @returns {string|null}
+   */
+  exportSVG() { return null; }
 
   /** Check if canvas is in light theme */
   get isLight() {

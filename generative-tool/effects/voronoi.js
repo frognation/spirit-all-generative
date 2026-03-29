@@ -88,7 +88,7 @@
         { label: "Anim Speed", min: 0,  max: 5,   step: 0.1, value: 0.5, fmt: "fixed1" },
         { label: "Chaos",      min: 0,  max: 100, step: 1,   value: 0,   fmt: "fixed0" },
         { label: "Trail",      min: 0,  max: 100, step: 5,   value: 0,   fmt: "fixed0" },
-        { label: "Brush",      min: 5,  max: 80,  step: 1,   value: 25,  fmt: "fixed0" },
+        // Brush moved to canvas toolbar
       ];
 
       for (const c of defs) {
@@ -141,7 +141,7 @@
 
         // Paint line on draw canvas
         const dCtx = this._drawCtx;
-        const brush = this.params.brush || 25;
+        const brush = this.brushSize || 25;
         dCtx.beginPath();
         dCtx.moveTo(lx, ly);
         dCtx.lineTo(x, y);
@@ -178,7 +178,7 @@
 
     _paintDot(x, y) {
       if (!this._drawCtx) return;
-      const r = (this.params.brush || 25) / 2;
+      const r = (this.brushSize || 25) / 2;
       this._drawCtx.beginPath();
       this._drawCtx.arc(x, y, r, 0, Math.PI * 2);
       this._drawCtx.fillStyle = "#fff";
@@ -625,6 +625,69 @@
           if (!this._pointInside[i]) ctx.globalAlpha = 1;
         }
       }
+    }
+
+    /** Export current voronoi state as true vector SVG */
+    exportSVG() {
+      if (!this._libReady || !this.points.length) return null;
+      const w = this.canvas.width, h = this.canvas.height;
+      const del = window.d3.Delaunay.from(this.points);
+      const vor = del.voronoi([0, 0, w, h]);
+      const lineW    = this.params.line_weight ?? 0.8;
+      const ptSize   = this.params.point_size  ?? 0;
+      const fillMode = this._fillMode();
+      const colors   = this._colors();
+      const bg       = document.getElementById("bg-color")?.value || "#000";
+      const chaos    = (this.params.chaos || 0) / 100;
+      const cRand    = EffectBase.prng((this.params.seed || 0) + 7777);
+
+      let paths = "";
+      let pts   = "";
+
+      for (let i = 0; i < this.points.length; i++) {
+        const inside = this._pointInside[i];
+        if (!inside && chaos <= 0) {
+          if (fillMode === "random") { cRand(); cRand(); }
+          continue;
+        }
+        const cell = vor.cellPolygon(i);
+        if (!cell || cell.length < 3) {
+          if (fillMode === "random") { cRand(); cRand(); }
+          continue;
+        }
+        const d = cell.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(" L");
+        const pathD = `M${d}Z`;
+        const opacity = inside ? 1 : chaos;
+        let fill = "none";
+        if (fillMode !== "none") {
+          switch (fillMode) {
+            case "gradient": {
+              const dx = this.points[i][0] - w / 2;
+              const dy = this.points[i][1] - h / 2;
+              const t  = Math.sqrt(dx * dx + dy * dy) / (Math.sqrt(w * w + h * h) / 2);
+              fill = this._lerpColor(colors.fill, colors.stroke, t);
+              break;
+            }
+            case "random":
+              fill = `hsl(${Math.round(cRand() * 360)},${Math.round(50 + cRand() * 30)}%,${Math.round(25 + cRand() * 45)}%)`;
+              break;
+            default:
+              fill = colors.fill;
+          }
+        }
+        const stroke = lineW > 0 ? ` stroke="${colors.stroke}" stroke-width="${lineW}"` : "";
+        const op = opacity < 1 ? ` opacity="${opacity.toFixed(2)}"` : "";
+        paths += `  <path d="${pathD}" fill="${fill}"${stroke}${op}/>\n`;
+
+        if (ptSize > 0) {
+          pts += `  <circle cx="${this.points[i][0].toFixed(2)}" cy="${this.points[i][1].toFixed(2)}" r="${ptSize}" fill="${colors.stroke}"${op}/>\n`;
+        }
+      }
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect width="${w}" height="${h}" fill="${bg}"/>
+${paths}${pts}</svg>`;
     }
 
     reset() {

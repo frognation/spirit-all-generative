@@ -18,8 +18,8 @@
     { name: "34 Life",                birth: [3, 4],          survival: [3, 4] },
     { name: "Amoeba",                 birth: [3, 5, 7],       survival: [1, 3, 5, 8] },
     { name: "Assimilation",           birth: [3, 4, 5],       survival: [4, 5, 6, 7] },
-    { name: "Coagulations",           birth: [3, 7, 8],       survival: [2, 3, 5, 6, 7, 8] },
     { name: "Coral",                  birth: [3],             survival: [4, 5, 6, 7, 8] },
+    { name: "Coagulations",           birth: [3, 7, 8],       survival: [2, 3, 5, 6, 7, 8] },
     { name: "Flakes",                 birth: [3],             survival: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
     { name: "Gnarl",                  birth: [1],             survival: [1] },
     { name: "Long Life",              birth: [3, 4, 5],       survival: [] },
@@ -79,9 +79,13 @@
       this._lastDrawX  = -1;
       this._lastDrawY  = -1;
 
-      // Offscreen buffer for seed extraction
-      this._seedCanvas = null;
-      this._seedCtx    = null;
+      this._defaultsApplied = false;
+
+      // Offscreen buffers for organic rendering
+      this._simCanvas  = null;
+      this._simCtx     = null;
+      this._blurBuf1   = null;   // Float32Array for blur ping-pong
+      this._blurBuf2   = null;
     }
 
 
@@ -90,6 +94,10 @@
        ══════════════════════════════════════════════════════════════════════ */
 
     setup() {
+      if (!this._defaultsApplied) {
+        this._defaultsApplied = true;
+        this._applyDefaults();
+      }
       this.readParams();
       this._readColors();
       this._parseRule();
@@ -97,7 +105,7 @@
 
       const w = this.canvas.width;
       const h = this.canvas.height;
-      this.cellSize = Math.max(1, Math.round(this.params.cell_size || 4));
+      this.cellSize = Math.max(1, Math.round(this.params.cell_size || 2));
       this.cols = Math.floor(w / this.cellSize);
       this.rows = Math.floor(h / this.cellSize);
 
@@ -105,6 +113,16 @@
       this.grid     = new Uint8Array(len);
       this.nextGrid = new Uint8Array(len);
       this.trail    = new Float32Array(len);
+
+      // Allocate organic rendering buffers
+      this._blurBuf1 = new Float32Array(len);
+      this._blurBuf2 = new Float32Array(len);
+      if (!this._simCanvas || this._simCanvas.width !== this.cols) {
+        this._simCanvas = document.createElement("canvas");
+        this._simCanvas.width  = this.cols;
+        this._simCanvas.height = this.rows;
+        this._simCtx = this._simCanvas.getContext("2d");
+      }
 
       // Seed from text / SVG input
       this._buildSeed(w, h);
@@ -124,13 +142,18 @@
       this._readColors();
       this._parseRule();
 
-      const gensPerFrame = Math.max(1, Math.round(
-        (this.params["gen/frame"] || this.params.gen_frame || 1) * this.speed
-      ));
-
-      for (let g = 0; g < gensPerFrame; g++) {
-        this._step();
-        this.generation++;
+      // Auto-stabilise: stop evolving after ~100 generations to preserve text outline.
+      // Mouse painting still adds cells, and Reset restarts evolution.
+      const maxGen = 100;
+      if (this.generation < maxGen) {
+        const gensPerFrame = Math.max(1, Math.round(
+          (this.params["gen/frame"] || this.params.gen_frame || 1) * this.speed
+        ));
+        for (let g = 0; g < gensPerFrame; g++) {
+          this._step();
+          this.generation++;
+          if (this.generation >= maxGen) break;
+        }
       }
 
       this._draw();
@@ -139,8 +162,33 @@
     destroy() {
       this._unbindMouse();
       this.grid = this.nextGrid = this.trail = null;
-      this._seedCanvas = this._seedCtx = null;
+      this._blurBuf1 = this._blurBuf2 = null;
+      this._simCanvas = this._simCtx = null;
       super.destroy();
+    }
+
+
+    /* ══════════════════════════════════════════════════════════════════════
+       Defaults — set slider values on first init for optimal organic look
+       ══════════════════════════════════════════════════════════════════════ */
+
+    _applyDefaults() {
+      const panel = document.getElementById("effect-cellular-automata");
+      if (!panel) return;
+      panel.querySelectorAll(".slider-row").forEach((row) => {
+        const lbl = row.querySelector(".slider-label");
+        const inp = row.querySelector("input[type='range']");
+        const val = row.querySelector(".slider-value");
+        if (!lbl || !inp) return;
+        const name = lbl.textContent.trim();
+        if (name === "Cell Size") {
+          inp.value = 2; if (val) val.textContent = "2";
+        } else if (name === "Density") {
+          inp.value = 0.4; if (val) val.textContent = "40%";
+        } else if (name === "Gen/Frame") {
+          inp.value = 2; if (val) val.textContent = "2";
+        }
+      });
     }
 
 
@@ -328,70 +376,108 @@
        Drawing
        ══════════════════════════════════════════════════════════════════════ */
 
+    /* ══════════════════════════════════════════════════════════════════════
+       Organic Rendering — blur → edge detect → 3D lit outlines
+       Processes at simulation resolution (cols×rows) then scales up.
+       ══════════════════════════════════════════════════════════════════════ */
+
     _draw() {
-      const { ctx, canvas, cols, rows, grid, trail, cellSize } = this;
-      const w = canvas.width;
-      const h = canvas.height;
+      const { ctx, canvas, cols, rows, grid, trail } = this;
+      const w = canvas.width, h = canvas.height;
+      const fade = this.fadeMode;
+
+      // ── 1. Build intensity field from grid + trail ──
+      const field = this._blurBuf1;
+      for (let i = 0; i < grid.length; i++) {
+        field[i] = fade === "hard"
+          ? (grid[i] ? 1.0 : 0.0)
+          : trail[i];
+      }
+
+      // ── 2. Separable box blur (4 passes ≈ Gaussian) ──
+      const blurred = this._blur(field, cols, rows, 4);
+
+      // ── 3. Hard threshold → binary edge detection → flat outlines ──
+      const simImg = this._simCtx.createImageData(cols, rows);
+      const sd     = simImg.data;
 
       const aR = this.aliveColor[0], aG = this.aliveColor[1], aB = this.aliveColor[2];
       const dR = this.deadColor[0],  dG = this.deadColor[1],  dB = this.deadColor[2];
-      const fade = this.fadeMode;
 
-      // Use ImageData for pixel-level control (fast)
-      const imgData = ctx.createImageData(w, h);
-      const buf     = imgData.data;
+      // Hard threshold: create binary mask from blurred field
+      const thresh = 0.18;
+      const mask = this._blurBuf2;   // reuse buffer
+      for (let i = 0; i < blurred.length; i++) {
+        mask[i] = blurred[i] > thresh ? 1 : 0;
+      }
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const gi = row * cols + col;
-          const alive = grid[gi] === 1;
+      const aR8 = (aR * 255) | 0, aG8 = (aG * 255) | 0, aB8 = (aB * 255) | 0;
+      const dR8 = (dR * 255) | 0, dG8 = (dG * 255) | 0, dB8 = (dB * 255) | 0;
 
-          let r, g, b;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i  = y * cols + x;
+          const pi = i * 4;
 
-          if (fade === "hard") {
-            if (alive) { r = aR; g = aG; b = aB; }
-            else       { r = dR; g = dG; b = dB; }
-          } else {
-            // Trail & Glow — blend alive ↔ dead via trail intensity
-            const t = trail[gi];
-            if (fade === "glow") {
-              // Glow: stronger, non-linear falloff with bloom-like feel
-              const gt = t * t;
-              r = dR + (aR - dR) * gt;
-              g = dG + (aG - dG) * gt;
-              b = dB + (aB - dB) * gt;
-            } else {
-              // Trail: linear blend
-              r = dR + (aR - dR) * t;
-              g = dG + (aG - dG) * t;
-              b = dB + (aB - dB) * t;
+          // Edge = any cell within 1px of a boundary (check all 8 neighbours)
+          let isEdge = false;
+          if (mask[i] === 1) {
+            for (let dy = -1; dy <= 1 && !isEdge; dy++) {
+              for (let dx = -1; dx <= 1 && !isEdge; dx++) {
+                if (dy === 0 && dx === 0) continue;
+                const ny = (y + dy + rows) % rows;
+                const nx = (x + dx + cols) % cols;
+                if (mask[ny * cols + nx] === 0) isEdge = true;
+              }
             }
           }
 
-          // Fill pixels for this cell
-          const px0 = col * cellSize;
-          const py0 = row * cellSize;
-          const px1 = Math.min(px0 + cellSize, w);
-          const py1 = Math.min(py0 + cellSize, h);
+          if (isEdge) {
+            sd[pi] = aR8; sd[pi+1] = aG8; sd[pi+2] = aB8;
+          } else {
+            sd[pi] = dR8; sd[pi+1] = dG8; sd[pi+2] = dB8;
+          }
+          sd[pi + 3] = 255;
+        }
+      }
 
-          const r8 = (r * 255) | 0;
-          const g8 = (g * 255) | 0;
-          const b8 = (b * 255) | 0;
+      this._simCtx.putImageData(simImg, 0, 0);
 
-          for (let py = py0; py < py1; py++) {
-            const rowOff = py * w;
-            for (let px = px0; px < px1; px++) {
-              const pi = (rowOff + px) * 4;
-              buf[pi]     = r8;
-              buf[pi + 1] = g8;
-              buf[pi + 2] = b8;
-              buf[pi + 3] = 255;
-            }
+      // ── 4. Scale up to main canvas (crisp nearest-neighbour) ──
+      ctx.imageSmoothingEnabled  = false;
+      ctx.drawImage(this._simCanvas, 0, 0, w, h);
+    }
+
+    /** Separable box blur (horizontal then vertical), repeated `passes` times. */
+    _blur(src, w, h, passes) {
+      let a = new Float32Array(src);
+      let b = this._blurBuf2;
+
+      for (let p = 0; p < passes; p++) {
+        // Horizontal pass
+        for (let y = 0; y < h; y++) {
+          const yo = y * w;
+          for (let x = 0; x < w; x++) {
+            b[yo + x] = (
+              a[yo + ((x - 1 + w) % w)] +
+              a[yo + x] +
+              a[yo + ((x + 1) % w)]
+            ) / 3;
+          }
+        }
+        // Vertical pass
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            a[y * w + x] = (
+              b[((y - 1 + h) % h) * w + x] +
+              b[y * w + x] +
+              b[((y + 1) % h) * w + x]
+            ) / 3;
           }
         }
       }
 
-      ctx.putImageData(imgData, 0, 0);
+      return a;
     }
 
 
@@ -453,8 +539,8 @@
       const col = Math.floor(px / this.cellSize);
       const row = Math.floor(py / this.cellSize);
 
-      // Brush radius in cells (scales with cell size)
-      const brushRadius = Math.max(1, Math.round(12 / this.cellSize));
+      // Brush radius in cells (from shared toolbar, scaled by cell size)
+      const brushRadius = Math.max(1, Math.round(this.brushSize / this.cellSize / 2));
 
       // Bresenham line from last position to fill gaps during fast dragging
       if (this._lastDrawX >= 0 && this._lastDrawY >= 0) {

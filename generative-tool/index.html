@@ -86,11 +86,15 @@
         <div class="drop-zone" id="image-drop">
           <div class="drop-zone-icon" style="font-size:20px;color:var(--text-tertiary);margin-bottom:2px">&#9655;</div>
           <div class="drop-zone-title" id="image-drop-title">Drop image file</div>
-          <div class="drop-zone-sub">SVG &middot; PNG &middot; JPG &middot; WebP</div>
+          <div class="drop-zone-sub">SVG &middot; PNG &middot; JPG &middot; WebP &middot; &#8984;V</div>
         </div>
         <div class="image-preview-wrap hidden" id="image-preview-wrap">
           <img id="image-preview" alt="preview" />
         </div>
+        <label class="toggle-label" style="margin-top:2px">
+          <input type="checkbox" id="image-invert" />
+          <span>Invert Colors</span>
+        </label>
         <button class="btn-unload" id="clear-image">Clear Image</button>
       </div>
     </div>
@@ -152,9 +156,16 @@
           <button class="pill" data-canvas-size="1080x1920">9:16</button>
           <button class="pill" data-canvas-size="3840x2160">4K</button>
         </div>
-        <div class="info-card">
-          <span class="info-card-label">Resolution</span>
-          <span class="info-card-value" id="canvas-res">1920 &times; 1080</span>
+        <!-- Resolution: editable W × H inputs -->
+        <div class="res-row">
+          <input class="res-input" type="number" id="canvas-w" value="1920" min="64" max="7680" step="1" />
+          <span class="res-x">&times;</span>
+          <input class="res-input" type="number" id="canvas-h" value="1080" min="64" max="4320" step="1" />
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Scale</span>
+          <input type="range" id="canvas-scale" min="0.1" max="3" step="0.05" value="1" data-format="fixed2" />
+          <span class="slider-value" id="canvas-scale-val">1.00</span>
         </div>
         <div class="color-row">
           <span class="sub-label-sm" style="min-width:32px;flex-shrink:0">BG</span>
@@ -181,11 +192,35 @@
       <button class="effect-tab" data-effect="limited-aggregation">Limited Aggregation</button>
       <button class="effect-tab" data-effect="space-colonization">Space Colonization</button>
       <button class="effect-tab" data-effect="voronoi">Voronoi</button>
+      <button class="effect-tab" data-effect="obstacle-vein">Obstacle Vein</button>
+      <button class="effect-tab" data-effect="painting-veins">Painting Veins</button>
+      <button class="effect-tab" data-effect="neuron-growth">Neuron Growth</button>
+    </div>
+
+    <!-- Canvas Tool Bar -->
+    <div class="canvas-toolbar">
+      <div class="canvas-tool-group">
+        <button class="canvas-tool active" data-tool="brush" title="Brush (B)">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/></svg>
+        </button>
+        <button class="canvas-tool" data-tool="smudge" title="Smudge (S)">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 16 C6 10, 10 6, 16 4"/><circle cx="16" cy="4" r="2.5"/></svg>
+        </button>
+      </div>
+      <div class="canvas-tool-divider"></div>
+      <div class="canvas-tool-slider">
+        <span class="canvas-tool-label">Size</span>
+        <input type="range" id="brush-size" min="2" max="100" step="1" value="20" />
+        <span class="canvas-tool-value" id="brush-size-val">20</span>
+      </div>
+      <div class="canvas-tool-divider"></div>
+      <span class="canvas-tool-label" id="zoom-label">100%</span>
     </div>
 
     <!-- Viewport -->
-    <div class="canvas-viewport">
+    <div class="canvas-viewport" id="canvas-viewport">
       <canvas id="main-canvas" width="640" height="640"></canvas>
+      <div class="brush-cursor" id="brush-cursor"></div>
     </div>
 
   </div>
@@ -244,11 +279,7 @@
             <input type="range" min="1" max="30" step="1" value="10" data-format="fixed0" />
             <span class="slider-value">10</span>
           </div>
-          <div class="slider-row">
-            <span class="slider-label">Brush Size</span>
-            <input type="range" min="1" max="60" step="1" value="15" data-format="fixed0" />
-            <span class="slider-value">15</span>
-          </div>
+          <!-- Brush Size moved to canvas toolbar -->
         </div>
       </div>
 
@@ -677,6 +708,272 @@
 
     </div><!-- /voronoi -->
 
+
+    <!-- ══════════════════════════════════
+         OBSTACLE VEIN
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-obstacle-vein">
+
+      <div>
+        <button class="section-btn" data-section-toggle="ov-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ov-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="ov-seed-val">1234</span>
+            <button class="btn-seed" data-seed-target="ov-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Seg Length</span>
+            <input type="range" min="1" max="15" step="0.5" value="3" data-format="fixed1" />
+            <span class="slider-value">3.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Attract Dist</span>
+            <input type="range" min="5" max="150" step="1" value="80" data-format="fixed0" />
+            <span class="slider-value">80</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Kill Dist</span>
+            <input type="range" min="1" max="30" step="0.5" value="8" data-format="fixed1" />
+            <span class="slider-value">8.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Branch Width</span>
+            <input type="range" min="0.3" max="5" step="0.1" value="0.5" data-format="fixed1" />
+            <span class="slider-value">0.5</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Tip Width</span>
+            <input type="range" min="0.5" max="5" step="0.1" value="1.5" data-format="fixed1" />
+            <span class="slider-value">1.5</span>
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Venation</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="ov-venation">Open</button>
+              <button class="pill" data-group="ov-venation">Closed</button>
+            </div>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Venation Type</span>
+            <input type="range" min="0" max="1" step="1" value="0" data-format="fixed0" class="hidden" />
+            <span class="slider-value hidden">1</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="ov-display">
+          <span class="section-title">Display</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ov-display" style="gap:10px">
+          <div class="pill-group" style="flex-direction:column;gap:6px">
+            <label class="toggle-label"><input type="checkbox" class="ov-toggle" data-toggle="ShowAttractors" /> <span>Show Attractors</span></label>
+            <label class="toggle-label"><input type="checkbox" class="ov-toggle" data-toggle="ShowTips" /> <span>Show Tips</span></label>
+            <label class="toggle-label"><input type="checkbox" checked class="ov-toggle" data-toggle="EnableCanalization" /> <span>Canalization</span></label>
+            <label class="toggle-label"><input type="checkbox" checked class="ov-toggle" data-toggle="EnableOpacityBlending" /> <span>Opacity Blending</span></label>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /obstacle-vein -->
+
+
+    <!-- ══════════════════════════════════
+         PAINTING VEINS
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-painting-veins">
+
+      <div>
+        <button class="section-btn" data-section-toggle="pv-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-pv-params" style="gap:10px">
+          <div class="slider-row">
+            <span class="slider-label">Seg Length</span>
+            <input type="range" min="1" max="15" step="0.5" value="5" data-format="fixed1" />
+            <span class="slider-value">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Attract Dist</span>
+            <input type="range" min="5" max="100" step="1" value="30" data-format="fixed0" />
+            <span class="slider-value">30</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Kill Dist</span>
+            <input type="range" min="1" max="30" step="0.5" value="5" data-format="fixed1" />
+            <span class="slider-value">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Branch Width</span>
+            <input type="range" min="0.3" max="5" step="0.1" value="1" data-format="fixed1" />
+            <span class="slider-value">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Tip Width</span>
+            <input type="range" min="0.5" max="5" step="0.1" value="2" data-format="fixed1" />
+            <span class="slider-value">2.0</span>
+          </div>
+          <div>
+            <div class="sub-label" style="margin-bottom:6px">Venation</div>
+            <div class="pill-group">
+              <button class="pill active" data-group="pv-venation">Open</button>
+              <button class="pill" data-group="pv-venation">Closed</button>
+            </div>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Venation Type</span>
+            <input type="range" min="0" max="1" step="1" value="0" data-format="fixed0" class="hidden" />
+            <span class="slider-value hidden">0</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="pv-display">
+          <span class="section-title">Display</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-pv-display" style="gap:10px">
+          <div class="pill-group" style="flex-direction:column;gap:6px">
+            <label class="toggle-label"><input type="checkbox" checked class="pv-toggle" data-toggle="ShowAttractors" /> <span>Show Attractors</span></label>
+            <label class="toggle-label"><input type="checkbox" class="pv-toggle" data-toggle="ShowTips" /> <span>Show Tips</span></label>
+            <label class="toggle-label"><input type="checkbox" class="pv-toggle" data-toggle="ShowAttractionZones" /> <span>Attraction Zones</span></label>
+            <label class="toggle-label"><input type="checkbox" class="pv-toggle" data-toggle="ShowKillZones" /> <span>Kill Zones</span></label>
+            <label class="toggle-label"><input type="checkbox" class="pv-toggle" data-toggle="ShowInfluenceLines" /> <span>Influence Lines</span></label>
+            <label class="toggle-label"><input type="checkbox" checked class="pv-toggle" data-toggle="EnableCanalization" /> <span>Canalization</span></label>
+            <label class="toggle-label"><input type="checkbox" class="pv-toggle" data-toggle="EnableOpacityBlending" /> <span>Opacity Blending</span></label>
+          </div>
+          <div class="info-card" style="margin-top:6px">
+            <span class="info-card-label">Usage</span>
+            <span class="info-card-value" style="font-size:8px">L-Click: Attract &middot; R-Click: Seed</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /painting-veins -->
+
+
+    <!-- ══════════════════════════════════
+         NEURON GROWTH
+         ══════════════════════════════════ -->
+    <div class="effect-panel hidden" id="effect-neuron-growth">
+
+      <div>
+        <button class="section-btn" data-section-toggle="ng-params">
+          <span class="section-title">Parameters</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ng-params" style="gap:10px">
+          <div class="seed-row">
+            <span class="sub-label-sm">Seed</span>
+            <span class="seed-value" id="ng-seed-val">7729</span>
+            <button class="btn-seed" data-seed-target="ng-seed-val">&#8635; Random</button>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Dendrites</span>
+            <input type="range" min="2" max="16" step="1" value="6" data-format="fixed0" />
+            <span class="slider-value">6</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Max Branches</span>
+            <input type="range" min="2" max="20" step="1" value="8" data-format="fixed0" />
+            <span class="slider-value">8</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Branch Prob</span>
+            <input type="range" min="0.01" max="0.5" step="0.01" value="0.15" data-format="fixed2" />
+            <span class="slider-value">0.15</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Seg Length</span>
+            <input type="range" min="2" max="25" step="0.5" value="8" data-format="fixed1" />
+            <span class="slider-value">8.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Curvature</span>
+            <input type="range" min="0.05" max="1.5" step="0.05" value="0.4" data-format="fixed2" />
+            <span class="slider-value">0.40</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Taper Rate</span>
+            <input type="range" min="0.5" max="0.98" step="0.01" value="0.82" data-format="fixed2" />
+            <span class="slider-value">0.82</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Base Thickness</span>
+            <input type="range" min="0.5" max="10" step="0.1" value="3.0" data-format="fixed1" />
+            <span class="slider-value">3.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Soma Size</span>
+            <input type="range" min="1" max="20" step="0.5" value="5" data-format="fixed1" />
+            <span class="slider-value">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Soma Spacing</span>
+            <input type="range" min="15" max="150" step="5" value="50" data-format="fixed0" />
+            <span class="slider-value">50</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Axon Length</span>
+            <input type="range" min="1" max="8" step="0.5" value="3.0" data-format="fixed1" />
+            <span class="slider-value">3.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Growth Speed</span>
+            <input type="range" min="1" max="100" step="1" value="20" data-format="fixed0" />
+            <span class="slider-value">20</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div>
+        <button class="section-btn" data-section-toggle="ng-style">
+          <span class="section-title">Style</span>
+          <span class="section-chevron">&#9662;</span>
+        </button>
+        <div class="section-body" id="section-ng-style" style="gap:10px">
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:52px;flex-shrink:0">Dendrite</span>
+            <input type="color" value="#ffffff" id="ng-dendrite-color" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:52px;flex-shrink:0">Axon</span>
+            <input type="color" value="#aaccff" id="ng-axon-color" />
+            <input class="input-text" value="#aaccff" />
+          </div>
+          <div class="color-row">
+            <span class="sub-label-sm" style="min-width:52px;flex-shrink:0">Soma</span>
+            <input type="color" value="#ffffff" id="ng-soma-color" />
+            <input class="input-text" value="#ffffff" />
+          </div>
+          <label class="toggle-label" style="margin-top:4px">
+            <input type="checkbox" id="ng-show-soma" checked />
+            <span>Show Soma</span>
+          </label>
+          <div class="slider-row">
+            <span class="slider-label">Opacity</span>
+            <input type="range" min="0.05" max="1" step="0.01" value="1.0" data-format="fixed2" />
+            <span class="slider-value">1.00</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /neuron-growth -->
+
     <div class="sidebar-spacer"></div>
   </div>
 
@@ -727,6 +1024,10 @@
 <script src="effects/limited-aggregation.js"></script>
 <script src="effects/space-colonization.js"></script>
 <script src="effects/voronoi.js"></script>
+<script src="effects/vein-core.js"></script>
+<script src="effects/obstacle-vein.js"></script>
+<script src="effects/painting-veins.js"></script>
+<script src="effects/neuron-growth.js"></script>
 
 <!-- Main UI (공통 UI 로직 — 이펙트와 독립) -->
 <script src="script.js"></script>

@@ -23,6 +23,200 @@ document.addEventListener("DOMContentLoaded", () => {
   let recordedChunks  = [];
   let isRecording     = false;
 
+  // Undo / Redo history
+  const _history      = [];       // array of snapshots
+  let   _historyIdx   = -1;       // current position
+  const _MAX_HISTORY  = 80;
+  let   _skipSnapshot = false;    // flag to prevent snapshot during restore
+  let   _historyDebounce = null;
+
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     Undo / Redo — 파라미터 스냅샷 기반 히스토리
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** Capture all UI control values into a plain object */
+  function captureSnapshot() {
+    const snap = {
+      // Text input
+      text:       document.getElementById("text-input")?.value ?? "",
+      font:       document.getElementById("font-select")?.value ?? "",
+      weight:     document.querySelector(".pill[data-weight].active")?.getAttribute("data-weight") ?? "400",
+      textColor:  document.getElementById("text-color")?.value ?? "#ffffff",
+      bgColor:    document.getElementById("bg-color")?.value ?? "#000000",
+      inputMode,
+      // Canvas size
+      canvasSize: document.querySelector("[data-canvas-size].active")?.getAttribute("data-canvas-size") ?? "1920x1080",
+      // Effect
+      effectId:   currentEffectId,
+      // All sliders (left + right sidebars)
+      sliders:    {},
+      // All pills with data-group
+      pills:      {},
+    };
+    document.querySelectorAll(".slider-row input[type='range']").forEach((sl) => {
+      const id = sl.closest(".slider-row")?.querySelector(".slider-label")?.textContent?.trim();
+      const section = sl.closest(".section-body")?.id || sl.closest(".effect-panel")?.id || "global";
+      if (id) snap.sliders[`${section}::${id}`] = sl.value;
+    });
+    document.querySelectorAll(".pill[data-group].active").forEach((p) => {
+      snap.pills[p.getAttribute("data-group")] = p.textContent.trim();
+    });
+    // Color pickers in right sidebar
+    snap.colorPickers = {};
+    document.querySelectorAll(".sidebar--right .color-row").forEach((row, i) => {
+      const picker = row.querySelector("input[type='color']");
+      if (picker) snap.colorPickers[`right-color-${i}`] = picker.value;
+    });
+    return snap;
+  }
+
+  /** Restore UI state from a snapshot */
+  function restoreSnapshot(snap) {
+    _skipSnapshot = true;
+
+    // Text
+    const textEl = document.getElementById("text-input");
+    if (textEl && textEl.value !== snap.text) textEl.value = snap.text;
+
+    // Font
+    const fontEl = document.getElementById("font-select");
+    if (fontEl && snap.font) fontEl.value = snap.font;
+
+    // Weight
+    document.querySelectorAll(".pill[data-weight]").forEach((p) => {
+      p.classList.toggle("active", p.getAttribute("data-weight") === snap.weight);
+    });
+
+    // Colors
+    const tc = document.getElementById("text-color");
+    const tch = document.getElementById("text-color-hex");
+    if (tc) { tc.value = snap.textColor; if (tch) tch.value = snap.textColor; }
+    const bc = document.getElementById("bg-color");
+    const bch = document.getElementById("bg-color-hex");
+    if (bc) { bc.value = snap.bgColor; if (bch) bch.value = snap.bgColor; }
+
+    // Canvas size
+    if (snap.canvasSize) {
+      document.querySelectorAll("[data-canvas-size]").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-canvas-size") === snap.canvasSize);
+      });
+      const s = snap.canvasSize.split("x").map(Number);
+      if (s.length === 2 && (canvas.width !== s[0] || canvas.height !== s[1])) {
+        canvas.width = s[0]; canvas.height = s[1];
+      }
+      const wIn = document.getElementById("canvas-w");
+      const hIn = document.getElementById("canvas-h");
+      if (wIn) wIn.value = s[0];
+      if (hIn) hIn.value = s[1];
+    }
+
+    // Sliders
+    for (const [key, val] of Object.entries(snap.sliders)) {
+      const [section, label] = key.split("::");
+      const sectionEl = document.getElementById(section) || document.getElementById(`effect-${snap.effectId}`);
+      if (!sectionEl) continue;
+      sectionEl.querySelectorAll(".slider-row").forEach((row) => {
+        const lbl = row.querySelector(".slider-label")?.textContent?.trim();
+        if (lbl === label) {
+          const input = row.querySelector("input[type='range']");
+          const disp = row.querySelector(".slider-value");
+          if (input) {
+            input.value = val;
+            // Update display
+            if (disp) {
+              const v = parseFloat(val);
+              const fmt = input.getAttribute("data-format") || "fixed2";
+              switch (fmt) {
+                case "percent": disp.textContent = Math.round(v * 100) + "%"; break;
+                case "degree":  disp.textContent = Math.round(v) + "\u00b0"; break;
+                case "fixed0":  disp.textContent = Math.round(v).toString(); break;
+                case "fixed1":  disp.textContent = v.toFixed(1); break;
+                case "fixed3":  disp.textContent = v.toFixed(3); break;
+                default:        disp.textContent = v.toFixed(2);
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Pills with data-group
+    for (const [group, label] of Object.entries(snap.pills)) {
+      document.querySelectorAll(`.pill[data-group="${group}"]`).forEach((p) => {
+        p.classList.toggle("active", p.textContent.trim() === label);
+      });
+    }
+
+    // Right sidebar color pickers
+    if (snap.colorPickers) {
+      const rows = document.querySelectorAll(".sidebar--right .color-row");
+      rows.forEach((row, i) => {
+        const key = `right-color-${i}`;
+        if (snap.colorPickers[key]) {
+          const picker = row.querySelector("input[type='color']");
+          const hex = row.querySelector(".input-text");
+          if (picker) { picker.value = snap.colorPickers[key]; }
+          if (hex) { hex.value = snap.colorPickers[key]; }
+        }
+      });
+    }
+
+    // Effect switch if different
+    if (snap.effectId !== currentEffectId) {
+      document.querySelectorAll(".effect-tab").forEach((t) => {
+        t.classList.toggle("active", t.getAttribute("data-effect") === snap.effectId);
+      });
+      const effectTitleEl = document.getElementById("effect-title");
+      const activeTab = document.querySelector(`.effect-tab[data-effect="${snap.effectId}"]`);
+      if (effectTitleEl && activeTab) effectTitleEl.textContent = activeTab.textContent.trim();
+      document.querySelectorAll(".effect-panel").forEach((p) => p.classList.add("hidden"));
+      document.getElementById(`effect-${snap.effectId}`)?.classList.remove("hidden");
+      switchEffect(snap.effectId);
+    } else {
+      // Same effect — re-render WITHOUT pushing history
+      renderInputPreview(canvas, mainCtx);
+      if (activeEffect) {
+        activeEffect.reset();
+        if (playing) activeEffect.start();
+      }
+    }
+
+    _skipSnapshot = false;
+    updateUndoRedoButtons();
+  }
+
+  /** Push current state onto history stack */
+  function pushHistory() {
+    if (_skipSnapshot) return;
+    const snap = captureSnapshot();
+    // Truncate any redo states ahead of current position
+    _history.length = _historyIdx + 1;
+    _history.push(snap);
+    if (_history.length > _MAX_HISTORY) _history.shift();
+    _historyIdx = _history.length - 1;
+    updateUndoRedoButtons();
+  }
+
+  function undo() {
+    if (_historyIdx <= 0) return;
+    _historyIdx--;
+    restoreSnapshot(_history[_historyIdx]);
+  }
+
+  function redo() {
+    if (_historyIdx >= _history.length - 1) return;
+    _historyIdx++;
+    restoreSnapshot(_history[_historyIdx]);
+  }
+
+  function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById("hud-undo");
+    const redoBtn = document.getElementById("hud-redo");
+    if (undoBtn) undoBtn.classList.toggle("disabled", _historyIdx <= 0);
+    if (redoBtn) redoBtn.classList.toggle("disabled", _historyIdx >= _history.length - 1);
+  }
+
 
   /* ══════════════════════════════════════════════════════════════════════════
      Input Rendering — 텍스트/SVG를 캔버스에 그리는 핵심 파이프라인
@@ -121,7 +315,11 @@ document.addEventListener("DOMContentLoaded", () => {
     tCtx.translate(w / 2 + tf.offsetX * w, h / 2 + tf.offsetY * h);
     if (tf.rotate)      tCtx.rotate(tf.rotate * Math.PI / 180);
     if (tf.scale !== 1) tCtx.scale(tf.scale, tf.scale);
-    if (tf.blur > 0)    tCtx.filter = `blur(${tf.blur}px)`;
+    // Build combined CSS filter
+    const filters = [];
+    if (tf.blur > 0) filters.push(`blur(${tf.blur}px)`);
+    if (inputMode === "image" && imageInverted) filters.push("invert(1)");
+    if (filters.length) tCtx.filter = filters.join(" ");
 
     if (inputMode === "type") {
       const fill = document.getElementById("text-color")?.value || "#ffffff";
@@ -144,6 +342,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function onInputChange() {
     // Immediate visual feedback
     renderInputPreview(canvas, mainCtx);
+    // Push to undo history (debounced to avoid flood from sliders)
+    if (!_skipSnapshot) {
+      clearTimeout(_historyDebounce);
+      _historyDebounce = setTimeout(() => { if (!_skipSnapshot) pushHistory(); }, 400);
+    }
     // Debounced effect reset
     clearTimeout(_inputDebounce);
     _inputDebounce = setTimeout(() => {
@@ -190,6 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
       activeEffect = null;
       renderInputPreview(canvas, mainCtx);
     }
+    if (!_skipSnapshot) pushHistory();
   }
 
 
@@ -334,10 +538,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const ih = loadedImage.naturalHeight || loadedImage.height;
       const fit = Math.min((w * 0.7) / iw, (h * 0.7) / ih);
       const dw = iw * fit, dh = ih * fit;
-      // Convert image to data URL for embedding
+      // Convert image to data URL for embedding (with invert if active)
       const tmpC = document.createElement("canvas");
       tmpC.width = iw; tmpC.height = ih;
-      tmpC.getContext("2d").drawImage(loadedImage, 0, 0);
+      const tmpCtx = tmpC.getContext("2d");
+      if (imageInverted) tmpCtx.filter = "invert(1)";
+      tmpCtx.drawImage(loadedImage, 0, 0);
       const imgData = tmpC.toDataURL("image/png");
       contentSvg = `      <image x="${(-dw / 2).toFixed(1)}" y="${(-dh / 2).toFixed(1)}" width="${dw.toFixed(1)}" height="${dh.toFixed(1)}" href="${imgData}" />\n`;
     }
@@ -476,22 +682,68 @@ ${contentSvg}  </g>
     });
   });
 
-  // Canvas size pills → actually resize canvas
+  // ── Resolution inputs ──
+  const canvasWInput = document.getElementById("canvas-w");
+  const canvasHInput = document.getElementById("canvas-h");
+  const canvasScaleSlider = document.getElementById("canvas-scale");
+  const canvasScaleVal = document.getElementById("canvas-scale-val");
+
+  function syncResInputs(w, h) {
+    if (canvasWInput) canvasWInput.value = w;
+    if (canvasHInput) canvasHInput.value = h;
+  }
+
+  function applyResolution() {
+    const w = Math.max(64, Math.min(7680, parseInt(canvasWInput?.value) || 1920));
+    const h = Math.max(64, Math.min(4320, parseInt(canvasHInput?.value) || 1080));
+    if (canvasWInput) canvasWInput.value = w;
+    if (canvasHInput) canvasHInput.value = h;
+    resizeCanvas(w, h);
+  }
+
+  // Direct number input → resize on Enter or blur
+  if (canvasWInput) {
+    canvasWInput.addEventListener("change", applyResolution);
+    canvasWInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); applyResolution(); }});
+  }
+  if (canvasHInput) {
+    canvasHInput.addEventListener("change", applyResolution);
+    canvasHInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); applyResolution(); }});
+  }
+
+  // Scale slider → multiply base resolution
+  let _baseW = 1920, _baseH = 1080;
+  if (canvasScaleSlider) {
+    canvasScaleSlider.addEventListener("input", () => {
+      const s = parseFloat(canvasScaleSlider.value);
+      if (canvasScaleVal) canvasScaleVal.textContent = s.toFixed(2);
+      const w = Math.round(_baseW * s);
+      const h = Math.round(_baseH * s);
+      syncResInputs(w, h);
+      resizeCanvas(w, h);
+    });
+  }
+
+  // Canvas size pills → set preset and sync inputs
   document.querySelectorAll("[data-canvas-size]").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("[data-canvas-size]").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const key = btn.getAttribute("data-canvas-size");
       const sizeMap = {
-        "1080x1080": [1080, 1080, "1080 \u00d7 1080"],
-        "1920x1080": [1920, 1080, "1920 \u00d7 1080"],
-        "1080x1920": [1080, 1920, "1080 \u00d7 1920"],
-        "3840x2160": [3840, 2160, "3840 \u00d7 2160"],
+        "1080x1080": [1080, 1080],
+        "1920x1080": [1920, 1080],
+        "1080x1920": [1080, 1920],
+        "3840x2160": [3840, 2160],
       };
-      const s  = sizeMap[key];
-      const el = document.getElementById("canvas-res");
-      if (el && s) el.textContent = s[2];
-      if (s) resizeCanvas(s[0], s[1]);
+      const s = sizeMap[key];
+      if (s) {
+        _baseW = s[0]; _baseH = s[1];
+        // Reset scale to 1
+        if (canvasScaleSlider) { canvasScaleSlider.value = 1; if (canvasScaleVal) canvasScaleVal.textContent = "1.00"; }
+        syncResInputs(s[0], s[1]);
+        resizeCanvas(s[0], s[1]);
+      }
     });
   });
 
@@ -505,6 +757,7 @@ ${contentSvg}  </g>
       if (el) el.textContent = Math.floor(Math.random() * 99999).toString().padStart(4, "0");
       // Reset effect with new seed
       if (activeEffect) { activeEffect.reset(); if (playing) activeEffect.start(); }
+      pushHistory();
     });
   });
 
@@ -559,15 +812,19 @@ ${contentSvg}  </g>
 
 
   /* ══════════════════════════════════════════════════════════════════════════
-     HUD — Undo / Redo (keyboard shortcut visual hint)
+     HUD — Undo / Redo
      ══════════════════════════════════════════════════════════════════════════ */
-  const undoBtn = document.getElementById("hud-undo");
-  const redoBtn = document.getElementById("hud-redo");
+  document.getElementById("hud-undo")?.addEventListener("click", undo);
+  document.getElementById("hud-redo")?.addEventListener("click", redo);
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z")
-      undoBtn?.classList.remove("disabled");
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "z")
-      redoBtn?.classList.remove("disabled");
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "z") {
+      e.preventDefault();
+      undo();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "z" || e.key === "Z")) {
+      e.preventDefault();
+      redo();
+    }
   });
 
 
@@ -658,6 +915,7 @@ ${contentSvg}  </g>
     const img = new Image();
     img.onload = () => {
       loadedImage = img;
+      window._spiritLoadedImage = img;
       if (imageTitle) imageTitle.textContent = file.name;
       if (imageDrop)  imageDrop.classList.add("has-image");
       if (previewWrap) { previewWrap.classList.remove("hidden"); previewImg.src = url; }
@@ -670,6 +928,7 @@ ${contentSvg}  </g>
         const img2 = new Image();
         img2.onload = () => {
           loadedImage = img2;
+          window._spiritLoadedImage = img2;
           if (imageTitle) imageTitle.textContent = file.name;
           if (imageDrop)  imageDrop.classList.add("has-image");
           if (previewWrap) { previewWrap.classList.remove("hidden"); previewImg.src = img2.src; }
@@ -709,9 +968,52 @@ ${contentSvg}  </g>
   if (clearImage) {
     clearImage.addEventListener("click", () => {
       loadedImage = null;
+      window._spiritLoadedImage = null;
       if (imageTitle)  imageTitle.textContent = "Drop image file";
       if (imageDrop)   imageDrop.classList.remove("has-image");
       if (previewWrap) previewWrap.classList.add("hidden");
+      onInputChange();
+    });
+  }
+
+  // ── Cmd+V / Ctrl+V Paste image from clipboard ──
+  function loadImageFromBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      loadedImage = img;
+      window._spiritLoadedImage = img;
+      if (imageTitle) imageTitle.textContent = name || "Pasted image";
+      if (imageDrop)  imageDrop.classList.add("has-image");
+      if (previewWrap) { previewWrap.classList.remove("hidden"); previewImg.src = url; }
+      // Auto-switch to Image tab
+      if (inputMode !== "image") {
+        document.querySelector('.input-tab[data-input-tab="image"]')?.click();
+      }
+      onInputChange();
+    };
+    img.src = url;
+  }
+
+  document.addEventListener("paste", (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (blob) loadImageFromBlob(blob, "Clipboard");
+        return;
+      }
+    }
+  });
+
+  // ── Invert Colors checkbox ──
+  let imageInverted = false;
+  const invertCheckbox = document.getElementById("image-invert");
+  if (invertCheckbox) {
+    invertCheckbox.addEventListener("change", () => {
+      imageInverted = invertCheckbox.checked;
       onInputChange();
     });
   }
@@ -794,18 +1096,252 @@ ${contentSvg}  </g>
 
 
   /* ══════════════════════════════════════════════════════════════════════════
+     Canvas Tools — Brush / Smudge + Brush Cursor + Zoom
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  let currentTool  = "brush";   // "brush" | "smudge"
+  let brushSize    = 20;
+  let zoomLevel    = 1;
+  const MIN_ZOOM   = 0.2;
+  const MAX_ZOOM   = 5;
+
+  const viewport   = document.getElementById("canvas-viewport");
+  const brushCursor = document.getElementById("brush-cursor");
+  const brushSlider = document.getElementById("brush-size");
+  const brushVal    = document.getElementById("brush-size-val");
+  const zoomLabel   = document.getElementById("zoom-label");
+
+  // ── Tool Switching ──
+  document.querySelectorAll(".canvas-tool[data-tool]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".canvas-tool[data-tool]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentTool = btn.getAttribute("data-tool");
+    });
+  });
+  // Keyboard shortcuts: B = brush, S = smudge
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+    if (e.key === "b" || e.key === "B") {
+      document.querySelector('.canvas-tool[data-tool="brush"]')?.click();
+    } else if (e.key === "s" || e.key === "S") {
+      document.querySelector('.canvas-tool[data-tool="smudge"]')?.click();
+    }
+  });
+
+  // ── Brush Size Slider ──
+  if (brushSlider) {
+    brushSlider.addEventListener("input", () => {
+      brushSize = parseInt(brushSlider.value);
+      if (brushVal) brushVal.textContent = brushSize;
+      updateBrushCursor();
+    });
+  }
+
+  function updateBrushCursor(x, y) {
+    if (!brushCursor) return;
+    const displaySize = brushSize * zoomLevel;
+    brushCursor.style.width  = displaySize + "px";
+    brushCursor.style.height = displaySize + "px";
+    if (x !== undefined && y !== undefined) {
+      brushCursor.style.left = x + "px";
+      brushCursor.style.top  = y + "px";
+    }
+  }
+
+  // ── Brush Cursor Tracking ──
+  if (viewport) {
+    viewport.addEventListener("mousemove", (e) => {
+      const rect = viewport.getBoundingClientRect();
+      updateBrushCursor(e.clientX - rect.left, e.clientY - rect.top);
+    });
+    viewport.addEventListener("mouseleave", () => {
+      if (brushCursor) brushCursor.style.display = "none";
+    });
+    viewport.addEventListener("mouseenter", () => {
+      if (brushCursor) brushCursor.style.display = "block";
+      updateBrushCursor();
+    });
+  }
+
+  // ── Smudge Tool (Photoshop-style finger drag) ──
+  let _smudgeActive = false;
+  let _smudgeLastX  = 0;
+  let _smudgeLastY  = 0;
+  let _smudgeBuffer = null;  // Float32Array holding "picked up" colour
+
+  function getCanvasCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width  / rect.width),
+      y: (e.clientY - rect.top)  * (canvas.height / rect.height),
+    };
+  }
+
+  /** Pick up a circular patch of pixels into _smudgeBuffer */
+  function smudgePickup(cx, cy) {
+    const r  = Math.round(brushSize / 2);
+    const d  = r * 2 + 1;
+    _smudgeBuffer = new Float32Array(d * d * 4);
+    const ix = Math.round(cx) - r, iy = Math.round(cy) - r;
+    const clamped = mainCtx.getImageData(
+      Math.max(0, ix), Math.max(0, iy),
+      Math.min(d, canvas.width - Math.max(0, ix)),
+      Math.min(d, canvas.height - Math.max(0, iy))
+    );
+    const sd = clamped.data;
+    const offX = Math.max(0, -ix), offY = Math.max(0, -iy);
+    for (let y = 0; y < clamped.height; y++) {
+      for (let x = 0; x < clamped.width; x++) {
+        const si = (y * clamped.width + x) * 4;
+        const di = ((y + offY) * d + (x + offX)) * 4;
+        _smudgeBuffer[di]     = sd[si];
+        _smudgeBuffer[di + 1] = sd[si + 1];
+        _smudgeBuffer[di + 2] = sd[si + 2];
+        _smudgeBuffer[di + 3] = sd[si + 3];
+      }
+    }
+  }
+
+  /** Smudge: blend _smudgeBuffer onto canvas at (cx,cy), then re-sample */
+  function smudgeStroke(cx, cy) {
+    const r  = Math.round(brushSize / 2);
+    const d  = r * 2 + 1;
+    if (!_smudgeBuffer || _smudgeBuffer.length !== d * d * 4) return;
+
+    const strength = 0.45;  // how much of the "finger" colour to deposit
+    const ix = Math.round(cx) - r, iy = Math.round(cy) - r;
+    const sx = Math.max(0, ix), sy = Math.max(0, iy);
+    const sw = Math.min(d, canvas.width - sx), sh = Math.min(d, canvas.height - sy);
+    if (sw <= 0 || sh <= 0) return;
+
+    const imgData = mainCtx.getImageData(sx, sy, sw, sh);
+    const data = imgData.data;
+    const offX = sx - ix, offY = sy - iy;
+    const r2 = r * r;
+
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        const bx = x + offX - r, by = y + offY - r;
+        const dist2 = bx * bx + by * by;
+        if (dist2 > r2) continue;
+
+        // Smooth circular falloff
+        const falloff = 1 - Math.sqrt(dist2) / r;
+        const t = falloff * falloff * strength;
+
+        const bi = ((y + offY) * d + (x + offX)) * 4;
+        const pi = (y * sw + x) * 4;
+
+        // Blend finger buffer onto canvas
+        data[pi]     = data[pi]     * (1 - t) + _smudgeBuffer[bi]     * t;
+        data[pi + 1] = data[pi + 1] * (1 - t) + _smudgeBuffer[bi + 1] * t;
+        data[pi + 2] = data[pi + 2] * (1 - t) + _smudgeBuffer[bi + 2] * t;
+
+        // Update finger buffer: pick up some of the new canvas colour
+        const pickup = t * 0.7;
+        _smudgeBuffer[bi]     = _smudgeBuffer[bi]     * (1 - pickup) + data[pi]     * pickup;
+        _smudgeBuffer[bi + 1] = _smudgeBuffer[bi + 1] * (1 - pickup) + data[pi + 1] * pickup;
+        _smudgeBuffer[bi + 2] = _smudgeBuffer[bi + 2] * (1 - pickup) + data[pi + 2] * pickup;
+      }
+    }
+    mainCtx.putImageData(imgData, sx, sy);
+  }
+
+  if (canvas) {
+    canvas.addEventListener("mousedown", (e) => {
+      if (currentTool === "smudge" && e.button === 0) {
+        _smudgeActive = true;
+        const c = getCanvasCoords(e);
+        _smudgeLastX = c.x;
+        _smudgeLastY = c.y;
+        smudgePickup(c.x, c.y);  // pick up initial colours
+        e.preventDefault();
+      }
+    });
+    canvas.addEventListener("mousemove", (e) => {
+      if (_smudgeActive && currentTool === "smudge") {
+        const c = getCanvasCoords(e);
+        // Interpolate for smooth strokes
+        const dx = c.x - _smudgeLastX, dy = c.y - _smudgeLastY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const step = Math.max(2, brushSize / 6);
+        if (dist > 0.5) {
+          const steps = Math.ceil(dist / step);
+          for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            smudgeStroke(_smudgeLastX + dx * t, _smudgeLastY + dy * t);
+          }
+        }
+        _smudgeLastX = c.x;
+        _smudgeLastY = c.y;
+      }
+    });
+    document.addEventListener("mouseup", () => {
+      _smudgeActive = false;
+      _smudgeBuffer = null;
+    });
+  }
+
+  // ── Zoom (Cmd+Wheel / Ctrl+Wheel) ──
+  function setZoom(newZoom) {
+    zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+    if (canvas) canvas.style.transform = `scale(${zoomLevel})`;
+    if (zoomLabel) zoomLabel.textContent = Math.round(zoomLevel * 100) + "%";
+    updateBrushCursor();
+  }
+
+  if (viewport) {
+    viewport.addEventListener("wheel", (e) => {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setZoom(zoomLevel + delta * zoomLevel);
+      }
+    }, { passive: false });
+  }
+
+  // Keyboard zoom: Cmd+= / Cmd+- / Cmd+0
+  document.addEventListener("keydown", (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key === "=" || e.key === "+") { e.preventDefault(); setZoom(zoomLevel * 1.15); }
+    if (e.key === "-")                  { e.preventDefault(); setZoom(zoomLevel / 1.15); }
+    if (e.key === "0")                  { e.preventDefault(); setZoom(1); }
+  });
+
+  // ── Bracket keys to change brush size ──
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (e.key === "[") { brushSize = Math.max(2, brushSize - 5); }
+    if (e.key === "]") { brushSize = Math.min(100, brushSize + 5); }
+    if (e.key === "[" || e.key === "]") {
+      if (brushSlider) brushSlider.value = brushSize;
+      if (brushVal) brushVal.textContent = brushSize;
+      updateBrushCursor();
+    }
+  });
+
+
+  /* ══════════════════════════════════════════════════════════════════════════
      Boot
      ══════════════════════════════════════════════════════════════════════════ */
   loadCustomFonts();
 
-  // Apply initial canvas size from the active pill
+  // Apply initial canvas size from the active pill + sync inputs
   const initPill = document.querySelector("[data-canvas-size].active");
   if (initPill) {
     const key = initPill.getAttribute("data-canvas-size");
     const [w, h] = key.split("x").map(Number);
-    if (w && h) { canvas.width = w; canvas.height = h; }
+    if (w && h) {
+      canvas.width = w; canvas.height = h;
+      _baseW = w; _baseH = h;
+      syncResInputs(w, h);
+    }
   }
 
   switchEffect(currentEffectId);
+
+  // Push initial snapshot so first undo has a baseline
+  setTimeout(pushHistory, 500);
 
 });

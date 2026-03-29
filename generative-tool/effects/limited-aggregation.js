@@ -5,6 +5,7 @@
    Seeds densely along the center axis creating a solid trunk,
    then DLA branches radiate outward filling letter shapes
    with frost-like crystalline growth extending beyond boundaries.
+   Active Tendril System creates Lichtenberg-figure-like long branches.
    Source: code-base/limited-aggregation
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -34,9 +35,20 @@
       this._rng = EffectBase.prng(this.params.seed || 0);
       this._prevParticles = this.params.particles || 3000;
 
-      // Exterior tip tracking for overgrowth (circular buffer)
-      this._tips = [];
-      this._tipMax = 300;
+      // Text center of mass (for directional bias on tendrils)
+      this._cx = W >> 1;
+      this._cy = H >> 1;
+      if (this.interior.length) {
+        let sx = 0, sy = 0;
+        for (const idx of this.interior) { sx += idx % W; sy += (idx / W) | 0; }
+        this._cx = (sx / this.interior.length) | 0;
+        this._cy = (sy / this.interior.length) | 0;
+      }
+
+      // Active Tendril System — Lichtenberg-figure-like persistent branch growth
+      this._tendrils = [];
+      this._maxTendrils = 16;
+      this._tendrilDecay = 0;
 
       this._ensureCustomControls();
       this._computeSpawnBox();
@@ -71,7 +83,7 @@
       this._lastPt = null;
 
       this._onDown = (e) => {
-        if (e.button !== 0) return; // left click only
+        if (e.button !== 0) return;
         this._drawing = true;
         const p = this._toCanvas(e);
         this._lastPt = p;
@@ -113,7 +125,7 @@
 
     _paintSeed(x0, y0, x1, y1) {
       const W = this.canvas.width, H = this.canvas.height;
-      const brushR = Math.max(2, ((this.params.radius || 2) + 1) | 0);
+      const brushR = Math.max(2, Math.round(this.brushSize / 2));
       this._cacheColor();
       const [cr, cg, cb] = this._cc;
       const d = this.imgData.data;
@@ -121,7 +133,6 @@
       const mask = this.mask;
       const r2 = brushR * brushR;
 
-      // Bresenham line with thick brush
       const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
       const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
       let err = dx - dy, cx = x0, cy = y0;
@@ -154,7 +165,6 @@
         if (e2 < dx) { err += dx; cy += sy; }
       }
 
-      // Expand spawn box if drawn outside
       const margin = 40;
       const sb = this.sBox;
       sb.x0 = Math.max(0, Math.min(sb.x0, x0 - margin, x1 - margin));
@@ -296,11 +306,10 @@
       const visited = new Uint8Array(W * H);
       const queue = [];
 
-      // BFS sources: non-text pixels adjacent to text (the "shore")
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const i = y * W + x;
-          if (this.mask[i]) continue;  // skip text pixels
+          if (this.mask[i]) continue;
           let adjText = false;
           if (x > 0     && this.mask[i - 1]) adjText = true;
           if (x < W - 1 && this.mask[i + 1]) adjText = true;
@@ -313,7 +322,6 @@
         }
       }
 
-      // BFS into text pixels
       let head = 0;
       while (head < queue.length) {
         const idx = queue[head++];
@@ -373,26 +381,18 @@
       }
 
       const maxD = Math.max(1, this.maxDist);
-
-      // Seed density zones based on distance from boundary
-      // Core (center axis): dense but not 100% — leaves texture gaps
-      // Mid: sparse nucleation points
-      // Near boundary: empty — DLA branches fill this zone
       const coreT = maxD * 0.55;
       const midT  = maxD * 0.2;
 
       for (const idx of this.interior) {
         const d = this.distField[idx];
         if (d >= coreT) {
-          // Core axis: ~65% filled → dense trunk with micro-texture
           if (rng() < 0.65) this.grid[idx] = 1;
         } else if (d >= midT) {
-          // Mid zone: sparse nucleation
           if (rng() < 0.10) this.grid[idx] = 1;
         }
       }
 
-      // Sparse boundary outline guide (every ~4px)
       const bStep = Math.max(1, Math.min(4, (this.boundary.length / 400) | 0));
       for (let i = 0; i < this.boundary.length; i += bStep) {
         this.grid[this.boundary[i]] = 1;
@@ -427,18 +427,41 @@
       const W = this.canvas.width;
       const H = this.canvas.height;
       const overgrowth = this.params.overgrowth || 0;
+      const tendrils = this._tendrils;
 
-      // Overgrowth: spawn walkers near exterior branch tips → feeds long tendrils
-      if (overgrowth > 0 && this._tips.length > 5 && rng() < overgrowth * 0.6) {
-        const tip = this._tips[(rng() * this._tips.length) | 0];
-        const spread = 8 + ((1 - overgrowth) * 20) | 0; // tighter spread at high overgrowth
-        const tx = tip.x + (((rng() * spread * 2) | 0) - spread);
-        const ty = tip.y + (((rng() * spread * 2) | 0) - spread);
-        this.wx[i] = Math.max(0, Math.min(W - 1, tx));
-        this.wy[i] = Math.max(0, Math.min(H - 1, ty));
-        return;
+      // ─── Active Tendril Feeding (Lichtenberg) ─────────────────────────
+      // Spawn walkers BEYOND the active tendril tip (in the outward direction)
+      // so they walk back toward the tip and stick on its outer side → directed growth
+      // Low probability: only ~12% of walkers spawn near tendrils
+      // (too high → thick blobs instead of thin Lichtenberg branches)
+      if (overgrowth > 0 && tendrils && tendrils.length > 0 && rng() < overgrowth * 0.15) {
+        // Pick tendril weighted by remaining life (longer-lived get more walkers)
+        let totalLife = 0;
+        for (let t = 0; t < tendrils.length; t++) totalLife += tendrils[t].life;
+        if (totalLife <= 0) { /* fall through to normal spawn */ }
+        else {
+          let pick = rng() * totalLife;
+          let chosen = tendrils[0];
+          for (let t = 0; t < tendrils.length; t++) {
+            pick -= tendrils[t].life;
+            if (pick <= 0) { chosen = tendrils[t]; break; }
+          }
+
+          // Spawn in a directional cone BEYOND the tip (away from text center)
+          const spawnDist = 10 + (rng() * 25) | 0;
+          const spread = Math.PI * 0.55; // ±50° cone outward
+          const baseAngle = Math.atan2(chosen.dy, chosen.dx);
+          const angle = baseAngle + (rng() - 0.5) * spread;
+          const tx = chosen.x + Math.cos(angle) * spawnDist;
+          const ty = chosen.y + Math.sin(angle) * spawnDist;
+
+          this.wx[i] = Math.max(0, Math.min(W - 1, tx | 0));
+          this.wy[i] = Math.max(0, Math.min(H - 1, ty | 0));
+          return;
+        }
       }
 
+      // ─── Normal respawn ──────────────────────────────────────────────
       const r = rng();
       if (this.interior.length && r < 0.55) {
         const idx = this.interior[(rng() * this.interior.length) | 0];
@@ -456,6 +479,183 @@
         this.wx[i] = b.x0 + ((rng() * (b.x1 - b.x0)) | 0);
         this.wy[i] = b.y0 + ((rng() * (b.y1 - b.y0)) | 0);
       }
+    }
+
+    /* ── Active Tendril System (Lichtenberg figure growth) ─────────────── */
+
+    _onExteriorStick(x, y) {
+      const overgrowth = this.params.overgrowth || 0;
+      if (overgrowth <= 0) return;
+
+      const rng = this._rng;
+      const tendrils = this._tendrils;
+      const W = this.canvas.width, H = this.canvas.height;
+
+      // Direction from text center → outward
+      const ddx = x - this._cx;
+      const ddy = y - this._cy;
+      const len = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+      const dx = ddx / len;
+      const dy = ddy / len;
+
+      // Check if this particle is near an existing tendril tip
+      let nearest = null;
+      let nearDist = Infinity;
+      const captureR = 15; // px radius to capture a particle into a tendril
+      const captureR2 = captureR * captureR;
+      for (let t = 0; t < tendrils.length; t++) {
+        const td = tendrils[t];
+        const ex = x - td.x, ey = y - td.y;
+        const d2 = ex * ex + ey * ey;
+        if (d2 < nearDist && d2 < captureR2) {
+          nearDist = d2;
+          nearest = td;
+        }
+      }
+
+      if (nearest) {
+        // Extend existing tendril — move tip, refresh some life, update direction
+        nearest.x = x;
+        nearest.y = y;
+        // Blend direction (80% old + 20% new) for smooth curves
+        nearest.dx = nearest.dx * 0.8 + dx * 0.2;
+        nearest.dy = nearest.dy * 0.8 + dy * 0.2;
+        // Re-normalize
+        const nl = Math.sqrt(nearest.dx * nearest.dx + nearest.dy * nearest.dy) || 1;
+        nearest.dx /= nl;
+        nearest.dy /= nl;
+        // Feed life: +5..15 per captured particle (sustains active growth)
+        nearest.life = Math.min(nearest.maxLife * 1.2, nearest.life + 5 + ((rng() * 10) | 0));
+
+        // Expand spawn box to follow the tendril
+        const m = 30;
+        const sb = this.sBox;
+        if (x - m < sb.x0) sb.x0 = Math.max(0, x - m);
+        if (x + m > sb.x1) sb.x1 = Math.min(W, x + m);
+        if (y - m < sb.y0) sb.y0 = Math.max(0, y - m);
+        if (y + m > sb.y1) sb.y1 = Math.min(H, y + m);
+      } else if (tendrils.length < this._maxTendrils && rng() < overgrowth * 0.4) {
+        // Start a new tendril with power-law distributed lifetime (in frames)
+        // u^4 distribution: most tendrils short, but rare ones EXTREMELY long
+        const u = rng();
+        const maxLife = (60 + 1500 * Math.pow(u, 4) * overgrowth) | 0;
+        tendrils.push({
+          x, y,
+          dx, dy,       // outward direction
+          life: maxLife,
+          maxLife,
+        });
+      }
+    }
+
+    _decayTendrils() {
+      const tendrils = this._tendrils;
+      for (let t = tendrils.length - 1; t >= 0; t--) {
+        tendrils[t].life--;
+        if (tendrils[t].life <= 0) tendrils.splice(t, 1);
+      }
+    }
+
+    /* ── Direct Tendril Growth (Lichtenberg dielectric breakdown) ──────── */
+    // Unlike DLA's passive random walk, this ACTIVELY extends tendril tips
+    // with directional persistence + random deviation → long lightning branches.
+    // Sub-branching creates fractal structure.
+
+    _growTendrils(d, cr, cg, cb, radius, mode) {
+      const overgrowth = this.params.overgrowth || 0;
+      if (overgrowth <= 0) return false;
+
+      const rng = this._rng;
+      const tendrils = this._tendrils;
+      const W = this.canvas.width, H = this.canvas.height;
+      const grid = this.grid;
+      const sb = this.sBox;
+      let grew = false;
+
+      // Grow each active tendril (snapshot length to avoid iterating new sub-branches)
+      const tLen = tendrils.length;
+      for (let ti = 0; ti < tLen; ti++) {
+        const t = tendrils[ti];
+        if (t.life <= 0) continue;
+
+        // Growth speed: 1-3 pixels per frame, scaled by overgrowth
+        const growSteps = 1 + ((rng() * 2 * overgrowth) | 0);
+
+        for (let s = 0; s < growSteps; s++) {
+          // Random angular deviation (±35°) → organic curves
+          const deviation = (rng() - 0.5) * Math.PI * 0.39;
+          const baseAngle = Math.atan2(t.dy, t.dx);
+          const angle = baseAngle + deviation;
+          const cosA = Math.cos(angle), sinA = Math.sin(angle);
+
+          // Float tip position → prevents integer truncation stalling
+          const stepLen = 1.6;
+          const fx = t.x + cosA * stepLen;
+          const fy = t.y + sinA * stepLen;
+          const nx = fx | 0;
+          const ny = fy | 0;
+
+          if (nx < 1 || nx >= W - 1 || ny < 1 || ny >= H - 1) { t.life = 0; break; }
+
+          // Always advance tip (float), even if cell is already filled
+          t.x = fx;
+          t.y = fy;
+
+          // Direction persistence: 82% old + 18% new → smooth but organic
+          t.dx = t.dx * 0.82 + cosA * 0.18;
+          t.dy = t.dy * 0.82 + sinA * 0.18;
+          const nl = Math.sqrt(t.dx * t.dx + t.dy * t.dy) || 1;
+          t.dx /= nl;
+          t.dy /= nl;
+
+          const nidx = ny * W + nx;
+          if (grid[nidx]) continue; // cell already filled — tip advanced but no new pixel
+
+          grid[nidx] = 1;
+          this.gen++;
+
+          // Draw pixel
+          let pr = cr, pg = cg, pb = cb;
+          if (mode === "gradient") {
+            const ddx = nx - (W >> 1), ddy = ny - (H >> 1);
+            const tt = Math.min(1, Math.sqrt(ddx * ddx + ddy * ddy) / (Math.min(W, H) * 0.45));
+            pr = (cr * (1 - tt * 0.7)) | 0;
+            pg = (cg * (1 - tt * 0.5)) | 0;
+            pb = (cb * (1 - tt * 0.3)) | 0;
+          }
+
+          if (radius <= 1) {
+            const pi = nidx * 4;
+            d[pi] = pr; d[pi + 1] = pg; d[pi + 2] = pb;
+          } else {
+            this._stamp(nx, ny, radius, pr, pg, pb, W, H, d);
+          }
+          grew = true;
+
+          // Expand spawn box to track tendril
+          if (nx - 30 < sb.x0) sb.x0 = Math.max(0, nx - 30);
+          if (nx + 30 > sb.x1) sb.x1 = Math.min(W, nx + 30);
+          if (ny - 30 < sb.y0) sb.y0 = Math.max(0, ny - 30);
+          if (ny + 30 > sb.y1) sb.y1 = Math.min(H, ny + 30);
+        }
+
+        // Sub-branching: probabilistic fork → fractal Lichtenberg structure
+        if (t.life > 10 && rng() < 0.04 * overgrowth && tendrils.length < this._maxTendrils * 2) {
+          const forkDev = (rng() > 0.5 ? 1 : -1) * (Math.PI * 0.25 + rng() * Math.PI * 0.35);
+          const bAngle = Math.atan2(t.dy, t.dx) + forkDev;
+          const u = rng();
+          // Sub-branches: shorter lived (power-law), inheriting some parent life
+          const branchLife = Math.max(15, (t.life * 0.3 * Math.pow(u, 2)) | 0);
+          tendrils.push({
+            x: t.x, y: t.y,
+            dx: Math.cos(bAngle), dy: Math.sin(bAngle),
+            life: branchLife,
+            maxLife: branchLife,
+          });
+        }
+      }
+
+      return grew;
     }
 
     /* ── Dynamic Overgrowth slider ─────────────────────────────────────────── */
@@ -478,11 +678,9 @@
     /* ── Simulation + Rendering ────────────────────────────────────────────── */
 
     render() {
-      // Re-read params every frame for real-time slider reactivity
       this.readParams();
       this._cacheColor();
 
-      // Dynamic particle count
       const newP = Math.min(this.params.particles || 3000, 15000);
       if (newP !== this._prevParticles) {
         this._resizeWalkers(newP);
@@ -517,7 +715,6 @@
               this._respawn(i, rng);
               continue;
             }
-            // Respawn if outside spawn box AND no overgrowth tips nearby
             if ((nx < sb.x0 || nx >= sb.x1 || ny < sb.y0 || ny >= sb.y1) && !overgrowth) {
               this._respawn(i, rng);
               continue;
@@ -543,10 +740,9 @@
               grid[nidx] = 1;
               this.gen++;
 
-              // Track exterior tips for overgrowth tendril feeding
+              // Active Tendril System: track & feed exterior growth
               if (!this.mask[nidx]) {
-                this._tips.push({ x: nx, y: ny });
-                if (this._tips.length > this._tipMax) this._tips.shift();
+                this._onExteriorStick(nx, ny);
               }
 
               let pr = cr, pg = cg, pb = cb;
@@ -584,6 +780,13 @@
           }
         }
       }
+
+      // Direct tendril growth (Lichtenberg-style) — extends tips actively
+      const tendrilGrew = this._growTendrils(d, cr, cg, cb, radius, mode);
+      if (tendrilGrew) drew = true;
+
+      // Decay tendrils each frame
+      this._decayTendrils();
 
       if (drew) this.ctx.putImageData(this.imgData, 0, 0);
     }

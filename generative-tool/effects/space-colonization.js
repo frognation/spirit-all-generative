@@ -163,6 +163,19 @@
         pill.addEventListener("click", this._boundInputChange);
         this._inputListeners.push([pill, "click", this._boundInputChange]);
       });
+      // Input mode tabs (type ↔ image)
+      document.querySelectorAll('.input-tab[data-input-tab]').forEach(tab => {
+        tab.addEventListener("click", this._boundInputChange);
+        this._inputListeners.push([tab, "click", this._boundInputChange]);
+      });
+      // Image drop zone — listen for changes via MutationObserver on preview img
+      const previewImg = document.getElementById('image-preview');
+      if (previewImg) {
+        const obs = new MutationObserver(this._boundInputChange);
+        obs.observe(previewImg, { attributes: true, attributeFilter: ['src'] });
+        this._inputListeners.push([previewImg, '__mo__', obs]);
+      }
+
       const panel = document.getElementById("effect-space-colonization");
       if (panel) {
         panel.querySelectorAll("input[type='range']").forEach(s => { s.addEventListener("change", this._boundInputChange); this._inputListeners.push([s, "change", this._boundInputChange]); });
@@ -174,7 +187,10 @@
     }
 
     _unbindInputListeners() {
-      for (const [el, evt, fn] of this._inputListeners) el.removeEventListener(evt, fn);
+      for (const [el, evt, fn] of this._inputListeners) {
+        if (evt === '__mo__') fn.disconnect(); // MutationObserver
+        else el.removeEventListener(evt, fn);
+      }
       this._inputListeners = [];
       this._boundInputChange = null;
     }
@@ -223,7 +239,7 @@
       if (stroke.length < 2 || !this.store) return;
       const rand = Math.random;
       const inflR = this._inflR;
-      const brushRadius = 15;
+      const brushRadius = this.brushSize / 2;
 
       // Build attractors along stroke
       const attrs = [];
@@ -502,45 +518,95 @@
       if (activePill) this._shapeMode = activePill.textContent.trim();
     }
 
-    /* ── Extract text pixels with distance-to-edge ───────────────── */
+    /* ── Extract input pixels (text OR image) with distance-to-edge ── */
     _getTextPixels(w, h) {
-      const textEl = document.getElementById("text-input");
-      const text = textEl ? textEl.value.trim() : "";
-      if (!text) return [];
-
-      const fontSelect = document.querySelector("#font-select, .font-select");
-      const fontFamily = fontSelect ? fontSelect.value : "Arial";
-
-      let fontWeight = "400";
-      const weightPills = document.querySelectorAll('.pill-group .pill.active');
-      for (const p of weightPills) {
-        const t = p.textContent.trim().toUpperCase();
-        if (t === "LIGHT") fontWeight = "300";
-        else if (t === "REGULAR") fontWeight = "400";
-        else if (t === "BOLD") fontWeight = "700";
-        else if (t === "BLACK") fontWeight = "900";
-      }
-
       const off = document.createElement("canvas");
       off.width = w; off.height = h;
       const oc = off.getContext("2d");
-      const lines = text.split("\n");
+      oc.fillStyle = "#000";
+      oc.fillRect(0, 0, w, h);
 
-      let fontSize = 200;
-      oc.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-      const maxLineW = Math.max(...lines.map(l => oc.measureText(l).width));
-      if (maxLineW > 0) {
-        fontSize = Math.floor(fontSize * (w * 0.8) / maxLineW);
-        fontSize = Math.max(40, Math.min(fontSize, h * 0.7));
+      // Determine input mode
+      const inputTab = document.querySelector('.input-tab.active[data-input-tab]');
+      const inputMode = inputTab ? inputTab.getAttribute('data-input-tab') : 'type';
+
+      let fontSize = 100; // default for overflow calc
+
+      if (inputMode === 'image') {
+        // --- Image mode: render loaded image as white silhouette ---
+        // Get loaded image from script.js global or from DOM preview
+        const loadedImg = window._spiritLoadedImage
+          || document.querySelector('#image-preview img, #panel-image img');
+        if (!loadedImg) return [];
+
+        const iw = loadedImg.naturalWidth || loadedImg.width;
+        const ih = loadedImg.naturalHeight || loadedImg.height;
+        if (!iw || !ih) return [];
+
+        // Draw image to temp canvas, then threshold to binary
+        const tmpC = document.createElement("canvas");
+        tmpC.width = w; tmpC.height = h;
+        const tc = tmpC.getContext("2d");
+        tc.fillStyle = "#000";
+        tc.fillRect(0, 0, w, h);
+
+        // Center and scale (match script.js renderInputPreview logic)
+        const fit = Math.min((w * 0.8) / iw, (h * 0.8) / ih);
+        tc.save();
+        tc.translate(w / 2, h / 2);
+        tc.drawImage(loadedImg, -(iw * fit) / 2, -(ih * fit) / 2, iw * fit, ih * fit);
+        tc.restore();
+
+        // Convert to luminance mask: bright pixels → white on oc
+        const imgData = tc.getImageData(0, 0, w, h);
+        const src = imgData.data;
+        oc.fillStyle = "#fff";
+        for (let y = 0; y < h; y += 2) {
+          for (let x = 0; x < w; x += 2) {
+            const i = (y * w + x) * 4;
+            const lum = src[i] * 0.299 + src[i + 1] * 0.587 + src[i + 2] * 0.114;
+            if (lum > 40) {
+              oc.fillRect(x, y, 2, 2);
+            }
+          }
+        }
+        fontSize = Math.min(w, h) * 0.3;
+
+      } else {
+        // --- Text mode ---
+        const textEl = document.getElementById("text-input");
+        const text = textEl ? textEl.value.trim() : "";
+        if (!text) return [];
+
+        const fontSelect = document.querySelector("#font-select, .font-select");
+        const fontFamily = fontSelect ? fontSelect.value : "Arial";
+
+        let fontWeight = "400";
+        const weightPills = document.querySelectorAll('.pill-group .pill.active');
+        for (const p of weightPills) {
+          const t = p.textContent.trim().toUpperCase();
+          if (t === "LIGHT") fontWeight = "300";
+          else if (t === "REGULAR") fontWeight = "400";
+          else if (t === "BOLD") fontWeight = "700";
+          else if (t === "BLACK") fontWeight = "900";
+        }
+
+        const lines = text.split("\n");
+        fontSize = 200;
+        oc.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+        const maxLineW = Math.max(...lines.map(l => oc.measureText(l).width));
+        if (maxLineW > 0) {
+          fontSize = Math.floor(fontSize * (w * 0.8) / maxLineW);
+          fontSize = Math.max(40, Math.min(fontSize, h * 0.7));
+        }
+
+        oc.fillStyle = "#fff"; oc.textAlign = "center"; oc.textBaseline = "middle";
+        oc.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+        const lineH = fontSize * 1.15;
+        const totalH = lines.length * lineH;
+        const startY = (h - totalH) / 2 + lineH / 2;
+        for (let i = 0; i < lines.length; i++) oc.fillText(lines[i], w / 2, startY + i * lineH);
       }
-
-      oc.fillStyle = "#000"; oc.fillRect(0, 0, w, h);
-      oc.fillStyle = "#fff"; oc.textAlign = "center"; oc.textBaseline = "middle";
-      oc.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-      const lineH = fontSize * 1.15;
-      const totalH = lines.length * lineH;
-      const startY = (h - totalH) / 2 + lineH / 2;
-      for (let i = 0; i < lines.length; i++) oc.fillText(lines[i], w / 2, startY + i * lineH);
 
       const data = oc.getImageData(0, 0, w, h).data;
 
@@ -687,6 +753,49 @@
     render() {
       this._frameCount++;
       this._draw();
+    }
+
+    /** Export branches as vector SVG */
+    exportSVG() {
+      const store = this.store;
+      if (!store || store.count === 0) return null;
+      const w = this.canvas.width, h = this.canvas.height;
+      const bg = this.isLight ? "#e8e8e8" : "#000";
+      const branchColor = this._branchColor || (this.isLight ? "#222" : "#fff");
+      const leafColor   = this._leafColor   || "#4ade80";
+      const minThick    = this._minThick;
+      const maxThick    = this._maxThick;
+      const showLeaf    = this._showLeaf;
+
+      let branchPaths = "";
+      let leafPaths   = "";
+
+      for (let i = 0; i < store.count; i++) {
+        if (store.parent[i] < 0) continue;
+        const p  = store.parent[i];
+        const x1 = store.x[i].toFixed(2);
+        const y1 = store.y[i].toFixed(2);
+        const x2 = store.x[p].toFixed(2);
+        const y2 = store.y[p].toFixed(2);
+        const t  = Math.max(minThick, minThick + Math.min(store.thickness[i], maxThick));
+
+        if (store.isTip[i] && showLeaf) {
+          leafPaths += `M${x1},${y1}L${x2},${y2}`;
+        } else {
+          branchPaths += `  <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${t.toFixed(2)}"/>\n`;
+        }
+      }
+
+      const leafSvg = leafPaths
+        ? `  <path d="${leafPaths}" fill="none" stroke="${leafColor}" stroke-width="${Math.max(minThick * 0.5, minThick).toFixed(2)}" stroke-linecap="round"/>\n`
+        : "";
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect width="${w}" height="${h}" fill="${bg}"/>
+  <g stroke="${branchColor}" stroke-linecap="round" fill="none">
+${branchPaths}  </g>
+${leafSvg}</svg>`;
     }
   }
 
