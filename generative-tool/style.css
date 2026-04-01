@@ -844,5 +844,52 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
   cursor: pointer;
 }
 
+/* ── Export Progress Overlay ───────────────────────────────────────────── */
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.export-modal {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 16px;
+  padding: 28px 36px;
+  min-width: 320px;
+  text-align: center;
+}
+.export-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.export-progress-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--slider-track);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.export-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  transition: width 0.15s;
+}
+.export-status {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+}
+
 /* ── Hidden ────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }

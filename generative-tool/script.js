@@ -559,28 +559,239 @@ ${contentSvg}  </g>
     downloadBlob(blob, `spirit-gen-${Date.now()}.svg`);
   }
 
+  /* ── MP4 Export with WebCodecs + mp4-muxer ─────────────────────────────
+     Phase 1: Record — capture every canvas frame as VideoFrame
+     Phase 2: Encode & Mux — encode all frames to H.264, mux into MP4
+     Progress overlay shown during Phase 2
+     ──────────────────────────────────────────────────────────────────── */
+
+  // Frame buffer for recording
+  let capturedFrames = [];
+  let exportCancelled = false;
+
+  // Overlay elements
+  const exportOverlay  = document.getElementById("export-overlay");
+  const exportTitle    = document.getElementById("export-title");
+  const exportFill     = document.getElementById("export-progress-fill");
+  const exportStatus   = document.getElementById("export-status");
+  const exportCancel   = document.getElementById("export-cancel");
+
+  function showExportProgress(title, status, pct) {
+    if (exportOverlay) exportOverlay.classList.remove("hidden");
+    if (exportTitle)   exportTitle.textContent = title || "Exporting MP4...";
+    if (exportStatus)  exportStatus.textContent = status || "";
+    if (exportFill)    exportFill.style.width = (pct || 0) + "%";
+  }
+  function hideExportProgress() {
+    if (exportOverlay) exportOverlay.classList.add("hidden");
+  }
+  if (exportCancel) {
+    exportCancel.addEventListener("click", () => { exportCancelled = true; });
+  }
+
   function exportMP4() {
     const btn = document.getElementById("hud-export-mp4");
 
+    // ─── Toggle: Stop recording ───
     if (isRecording) {
-      // Stop recording
-      mediaRecorder.stop();
+      isRecording = false;
+      if (btn) { btn.textContent = "MP4"; btn.classList.remove("active"); }
+      encodeFramesToMP4();
       return;
     }
 
-    // Start recording
+    // ─── Check WebCodecs support ───
+    if (typeof VideoEncoder === "undefined" || typeof Mp4Muxer === "undefined") {
+      // Fallback: MediaRecorder WebM
+      fallbackWebM(btn);
+      return;
+    }
+
+    // ─── Start recording: capture frames ───
+    capturedFrames = [];
+    isRecording = true;
+    exportCancelled = false;
+    if (btn) { btn.textContent = "REC \u25CF"; btn.classList.add("active"); }
+
+    // Hook into the animation loop to capture frames
+    captureLoop();
+  }
+
+  function captureLoop() {
+    if (!isRecording) return;
+    try {
+      // Capture current canvas as ImageBitmap (fast, no copy)
+      createImageBitmap(canvas).then(bmp => {
+        capturedFrames.push(bmp);
+        requestAnimationFrame(captureLoop);
+      });
+    } catch (e) {
+      // Fallback: store as ImageData
+      const ctx2 = canvas.getContext("2d");
+      capturedFrames.push(ctx2.getImageData(0, 0, canvas.width, canvas.height));
+      requestAnimationFrame(captureLoop);
+    }
+  }
+
+  async function encodeFramesToMP4() {
+    const totalFrames = capturedFrames.length;
+    if (totalFrames === 0) { alert("No frames recorded."); return; }
+
+    const fps = 30;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Ensure even dimensions (H.264 requirement)
+    const encW = w % 2 === 0 ? w : w + 1;
+    const encH = h % 2 === 0 ? h : h + 1;
+
+    showExportProgress("Exporting MP4...", `0 / ${totalFrames} frames`, 0);
+
+    try {
+      const { Muxer, ArrayBufferTarget } = Mp4Muxer;
+
+      const target = new ArrayBufferTarget();
+      const muxer = new Muxer({
+        target,
+        video: {
+          codec: "avc",
+          width: encW,
+          height: encH,
+        },
+        fastStart: "in-memory",
+        firstTimestampBehavior: "offset",
+      });
+
+      let encodedCount = 0;
+      const frameDuration = 1_000_000 / fps; // microseconds
+
+      // Find a supported H.264 codec profile
+      const codecCandidates = [
+        "avc1.4D0032",  // Main Level 5.0
+        "avc1.4D401F",  // Main Level 3.1
+        "avc1.42001E",  // Baseline Level 3.0
+        "avc1.42E01E",  // Baseline Level 3.0 alt
+        "avc1.640032",  // High Level 5.0
+      ];
+
+      let selectedCodec = null;
+      for (const c of codecCandidates) {
+        try {
+          const support = await VideoEncoder.isConfigSupported({
+            codec: c, width: encW, height: encH, bitrate: 8_000_000, framerate: fps,
+          });
+          if (support.supported) { selectedCodec = c; break; }
+        } catch (_) { /* skip */ }
+      }
+
+      if (!selectedCodec) {
+        throw new Error("No supported H.264 codec found on this browser.");
+      }
+
+      let encoderError = null;
+      const encoder = new VideoEncoder({
+        output: (chunk, meta) => {
+          muxer.addVideoChunk(chunk, meta);
+          encodedCount++;
+          const pct = Math.round((encodedCount / totalFrames) * 100);
+          showExportProgress("Exporting MP4...", `${encodedCount} / ${totalFrames} frames`, pct);
+        },
+        error: (e) => {
+          console.error("VideoEncoder error:", e);
+          encoderError = e;
+        },
+      });
+
+      encoder.configure({
+        codec: selectedCodec,
+        width: encW,
+        height: encH,
+        bitrate: 8_000_000,
+        framerate: fps,
+        hardwareAcceleration: "prefer-software",
+      });
+
+      // Wait a tick to let configure errors propagate
+      await new Promise(r => setTimeout(r, 50));
+      if (encoderError || encoder.state === "closed") {
+        throw new Error(encoderError?.message || "Encoder closed during configure");
+      }
+
+      // Feed frames one by one
+      for (let i = 0; i < totalFrames; i++) {
+        if (exportCancelled) break;
+        if (encoder.state === "closed") {
+          throw new Error("Encoder closed unexpectedly at frame " + i);
+        }
+
+        const frameSrc = capturedFrames[i];
+        let vf;
+
+        if (frameSrc instanceof ImageBitmap) {
+          vf = new VideoFrame(frameSrc, {
+            timestamp: i * frameDuration,
+            duration: frameDuration,
+          });
+        } else {
+          const offC = new OffscreenCanvas(w, h);
+          const offCtx = offC.getContext("2d");
+          offCtx.putImageData(frameSrc, 0, 0);
+          vf = new VideoFrame(offC, {
+            timestamp: i * frameDuration,
+            duration: frameDuration,
+          });
+        }
+
+        encoder.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+        vf.close();
+
+        // Yield to UI periodically + back-pressure: wait if queue is full
+        if (encoder.encodeQueueSize > 10) {
+          await new Promise(r => setTimeout(r, 10));
+        }
+        if (i % 10 === 0) {
+          showExportProgress("Encoding...", `${i + 1} / ${totalFrames} frames`, Math.round(((i + 1) / totalFrames) * 90));
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+
+      if (!exportCancelled && encoder.state !== "closed") {
+        showExportProgress("Finalizing...", "Flushing encoder...", 92);
+        await encoder.flush();
+        muxer.finalize();
+
+        showExportProgress("Saving...", "Preparing download...", 100);
+        await new Promise(r => setTimeout(r, 100));
+
+        const mp4Blob = new Blob([target.buffer], { type: "video/mp4" });
+        downloadBlob(mp4Blob, `spirit-gen-${Date.now()}.mp4`);
+      }
+
+      if (encoder.state !== "closed") encoder.close();
+    } catch (e) {
+      console.error("MP4 export failed:", e);
+      alert("MP4 export failed: " + e.message + "\nFalling back to WebM.");
+      fallbackWebMFromFrames();
+    }
+
+    // Cleanup
+    capturedFrames.forEach(f => { if (f.close) f.close(); });
+    capturedFrames = [];
+    hideExportProgress();
+  }
+
+  // ── Fallback: MediaRecorder WebM (for browsers without WebCodecs) ──
+  function fallbackWebM(btn) {
+    if (isRecording) {
+      mediaRecorder.stop();
+      return;
+    }
     const stream = canvas.captureStream(30);
     const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm";
-
+      ? "video/webm;codecs=vp9" : "video/webm";
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunks.push(e.data);
-    };
-
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = () => {
       isRecording = false;
       if (btn) { btn.textContent = "MP4"; btn.classList.remove("active"); }
@@ -588,10 +799,16 @@ ${contentSvg}  </g>
       downloadBlob(blob, `spirit-gen-${Date.now()}.webm`);
       recordedChunks = [];
     };
-
-    mediaRecorder.start(1000);   // collect chunks every 1s — no time limit
+    mediaRecorder.start(1000);
     isRecording = true;
     if (btn) { btn.textContent = "REC \u25CF"; btn.classList.add("active"); }
+  }
+
+  function fallbackWebMFromFrames() {
+    // If WebCodecs failed, just clean up — no easy webm from raw frames
+    capturedFrames.forEach(f => { if (f.close) f.close(); });
+    capturedFrames = [];
+    hideExportProgress();
   }
 
 

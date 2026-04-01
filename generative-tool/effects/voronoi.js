@@ -3,7 +3,7 @@
    Voronoi tessellation that FORMS the text shape — cells whose seed point
    is inside the text are drawn; their jagged edges naturally create an
    organic letterform. Chaos blends in the outside cells.
-   Supports mouse drawing to expand the voronoi region interactively.
+   Supports mouse drawing / eraser / stroke-level undo.
    Uses d3-delaunay (loaded dynamically).
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -12,21 +12,33 @@
   class Voronoi extends EffectBase {
     constructor() {
       super("voronoi", "Voronoi");
-      this.points = [];
-      this.basePoints = [];
-      this.velocities = [];
+      this.points      = [];
+      this.basePoints   = [];
+      this.velocities   = [];
       this._pointInside = [];
-      this.frameCount = 0;
-      this._maskCanvas = null;
-      this._maskCtx = null;
-      this._maskData = null;
-      this._drawCanvas = null;
-      this._drawCtx = null;
-      this._drawing = false;
+      this.frameCount   = 0;
+      this._maskCanvas  = null;
+      this._maskCtx     = null;
+      this._maskData    = null;
+      this._drawCanvas  = null;
+      this._drawCtx     = null;
+      this._drawing     = false;
       this._lastDrawPos = null;
-      this._libReady = false;
+      this._hasDrawn    = false;
+      this._undoHistory = [];
+      this._libReady    = false;
       this._controlsInjected = false;
-      this._mouseHandlers = null;
+      this._mouseHandlers    = null;
+      this._keyHandler       = null;
+    }
+
+    /* ── Toolbar helpers ──────────────────────────────────────────────────── */
+
+    get _activeTool() {
+      return document.querySelector(".canvas-tool.active[data-tool]")?.dataset?.tool || "brush";
+    }
+    get _brushSize() {
+      return parseInt(document.getElementById("brush-size")?.value || "25");
     }
 
     /* ── d3-delaunay ──────────────────────────────────────────────────────── */
@@ -42,7 +54,7 @@
       });
     }
 
-    /* ── Adjust existing HTML slider defaults & ranges ─────────────────── */
+    /* ── Adjust HTML slider defaults & ranges ─────────────────────────────── */
 
     _setSliderDefaults() {
       const panel = document.getElementById("effect-voronoi");
@@ -55,29 +67,42 @@
           const inp = row.querySelector("input[type='range']");
           const val = row.querySelector(".slider-value");
           if (!lbl || !inp || lbl.textContent.trim() !== label) continue;
-          if (props.min != null) inp.min = props.min;
-          if (props.max != null) inp.max = props.max;
+          if (props.min  != null) inp.min  = props.min;
+          if (props.max  != null) inp.max  = props.max;
           if (props.step != null) inp.step = props.step;
           if (props.value != null) {
             inp.value = props.value;
             if (val) {
               const fmt = inp.dataset.format;
-              if (fmt === "fixed0") val.textContent = Math.round(props.value);
+              if (fmt === "fixed0")      val.textContent = Math.round(props.value);
               else if (fmt === "fixed1") val.textContent = (+props.value).toFixed(1);
               else if (fmt === "fixed2") val.textContent = (+props.value).toFixed(2);
-              else val.textContent = props.value;
+              else                       val.textContent = props.value;
             }
           }
         }
       };
 
-      set("Points",      { min: 50, max: 3000, step: 10, value: 800 });
+      set("Points",      { min: 50, max: 5000,  step: 10,  value: 800 });
       set("Relaxation",  { max: 50, value: 8 });
-      set("Line Weight", { min: 0, max: 3, step: 0.1, value: 0.8 });
-      set("Point Size",  { value: 0 });
+      set("Line Weight", { min: 0,  max: 3,     step: 0.1, value: 0.8 });
+      set("Point Size",  { max: 30, value: 0 });
+
+      // Default colours: fill = black, stroke = white
+      const colorSec = document.getElementById("section-v-color");
+      if (colorSec) {
+        colorSec.querySelectorAll(".color-row").forEach((row) => {
+          const lbl = row.querySelector(".sub-label-sm")?.textContent?.trim()?.toLowerCase();
+          const cInp = row.querySelector('input[type="color"]');
+          const tInp = row.querySelector('input[type="text"]');
+          if (!cInp) return;
+          if (lbl === "fill")   { cInp.value = "#000000"; if (tInp) tInp.value = "#000000"; }
+          if (lbl === "stroke") { cInp.value = "#ffffff"; if (tInp) tInp.value = "#ffffff"; }
+        });
+      }
     }
 
-    /* ── Inject extra controls ────────────────────────────────────────────── */
+    /* ── Inject extra slider controls ─────────────────────────────────────── */
 
     _injectControls() {
       if (this._controlsInjected) return;
@@ -85,10 +110,10 @@
       if (!section) return;
 
       const defs = [
-        { label: "Anim Speed", min: 0,  max: 5,   step: 0.1, value: 0.5, fmt: "fixed1" },
-        { label: "Chaos",      min: 0,  max: 100, step: 1,   value: 0,   fmt: "fixed0" },
-        { label: "Trail",      min: 0,  max: 100, step: 5,   value: 0,   fmt: "fixed0" },
-        // Brush moved to canvas toolbar
+        { label: "Anim Speed", min: 0, max: 5,   step: 0.1, value: 0.5, fmt: "fixed1" },
+        { label: "Chaos",      min: 0, max: 100, step: 1,   value: 0,   fmt: "fixed0" },
+        { label: "Trail",      min: 0, max: 100, step: 5,   value: 0,   fmt: "fixed0" },
+        { label: "Smooth",     min: 0, max: 100, step: 1,   value: 0,   fmt: "fixed0" },
       ];
 
       for (const c of defs) {
@@ -99,7 +124,6 @@
           `<span class="slider-label">${c.label}</span>` +
           `<input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.value}" data-format="${c.fmt}" />` +
           `<span class="slider-value">${c.fmt === "fixed1" ? (+c.value).toFixed(1) : Math.round(c.value)}</span>`;
-
         const input = row.querySelector("input");
         const valEl = row.querySelector(".slider-value");
         input.addEventListener("input", () => {
@@ -112,7 +136,85 @@
       this._controlsInjected = true;
     }
 
-    /* ── Mouse drawing ────────────────────────────────────────────────────── */
+    /* ── Inject eraser button into canvas toolbar ─────────────────────────── */
+
+    _injectToolbar() {
+      const toolGroup = document.querySelector(".canvas-tool-group");
+      if (!toolGroup || toolGroup.querySelector('[data-tool="eraser"]')) return;
+
+      const btn = document.createElement("button");
+      btn.className = "canvas-tool";
+      btn.dataset.tool = "eraser";
+      btn.title = "Eraser (E)";
+      btn.innerHTML =
+        '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">' +
+        '<path d="M6 17h8"/>' +
+        '<path d="M3.5 13.5 10 7l6.5 6.5-3 3h-7z"/>' +
+        '<path d="M10 7l-4.5 4.5" opacity=".5"/>' +
+        "</svg>";
+
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".canvas-tool[data-tool]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+      toolGroup.appendChild(btn);
+    }
+
+    /* ── Undo history (stroke-level) ──────────────────────────────────────── */
+
+    _saveUndo() {
+      if (!this._drawCtx) return;
+      this._undoHistory.push({
+        img: this._drawCtx.getImageData(0, 0, this._drawCanvas.width, this._drawCanvas.height),
+        pts: this.points.map((p) => [...p]),
+        base: this.basePoints.map((p) => [...p]),
+        vel: this.velocities.map((v) => ({ ...v })),
+        ins: [...this._pointInside],
+        drawn: this._hasDrawn,
+      });
+      if (this._undoHistory.length > 15) this._undoHistory.shift();
+    }
+
+    _undo() {
+      if (!this._undoHistory.length) return;
+      const s = this._undoHistory.pop();
+      this._drawCtx.putImageData(s.img, 0, 0);
+      this.points      = s.pts;
+      this.basePoints   = s.base;
+      this.velocities   = s.vel;
+      this._pointInside = s.ins;
+      this._hasDrawn    = s.drawn;
+      if (!this.running) this.render();
+    }
+
+    /* ── Keyboard (Eraser shortcut + Undo) ────────────────────────────────── */
+
+    _setupKeyboard() {
+      this._keyHandler = (e) => {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+
+        if (e.key === "e" || e.key === "E") {
+          document.querySelector('.canvas-tool[data-tool="eraser"]')?.click();
+          return;
+        }
+
+        if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          this._undo();
+        }
+      };
+      document.addEventListener("keydown", this._keyHandler, true);
+    }
+
+    _removeKeyboard() {
+      if (this._keyHandler) {
+        document.removeEventListener("keydown", this._keyHandler, true);
+        this._keyHandler = null;
+      }
+    }
+
+    /* ── Mouse drawing / erasing ──────────────────────────────────────────── */
 
     _setupMouseDraw() {
       if (this._mouseHandlers) return;
@@ -126,33 +228,60 @@
       };
 
       const onDown = (e) => {
-        // Only draw with left button
         if (e.button !== 0) return;
+        const tool = this._activeTool;
+        if (tool !== "brush" && tool !== "eraser") return;
+
         this._drawing = true;
         this._lastDrawPos = toCanvas(e);
-        this._paintDot(this._lastDrawPos[0], this._lastDrawPos[1]);
+
+        // Save state BEFORE this stroke for undo
+        this._saveUndo();
+
+        if (tool === "brush") {
+          this._paintDot(this._lastDrawPos[0], this._lastDrawPos[1]);
+        } else {
+          this._eraseDot(this._lastDrawPos[0], this._lastDrawPos[1]);
+        }
         e.preventDefault();
       };
 
       const onMove = (e) => {
         if (!this._drawing || !this._drawCtx) return;
+        const tool = this._activeTool;
         const [x, y] = toCanvas(e);
         const [lx, ly] = this._lastDrawPos;
+        const brush = this._brushSize;
 
-        // Paint line on draw canvas
-        const dCtx = this._drawCtx;
-        const brush = this.brushSize || 25;
-        dCtx.beginPath();
-        dCtx.moveTo(lx, ly);
-        dCtx.lineTo(x, y);
-        dCtx.strokeStyle = "#fff";
-        dCtx.lineWidth = brush;
-        dCtx.lineCap = "round";
-        dCtx.lineJoin = "round";
-        dCtx.stroke();
+        if (tool === "brush") {
+          const dCtx = this._drawCtx;
+          dCtx.globalCompositeOperation = "source-over";
+          dCtx.beginPath();
+          dCtx.moveTo(lx, ly);
+          dCtx.lineTo(x, y);
+          dCtx.strokeStyle = "#fff";
+          dCtx.lineWidth = brush;
+          dCtx.lineCap = "round";
+          dCtx.lineJoin = "round";
+          dCtx.stroke();
 
-        // Scatter voronoi points along stroke
-        this._addDrawPoints(lx, ly, x, y, brush);
+          this._addDrawPoints(lx, ly, x, y, brush);
+          this._hasDrawn = true;
+        } else if (tool === "eraser") {
+          const dCtx = this._drawCtx;
+          dCtx.globalCompositeOperation = "destination-out";
+          dCtx.beginPath();
+          dCtx.moveTo(lx, ly);
+          dCtx.lineTo(x, y);
+          dCtx.strokeStyle = "rgba(0,0,0,1)";
+          dCtx.lineWidth = brush;
+          dCtx.lineCap = "round";
+          dCtx.lineJoin = "round";
+          dCtx.stroke();
+          dCtx.globalCompositeOperation = "source-over";
+
+          this._erasePointsLine(lx, ly, x, y, brush / 2);
+        }
 
         this._lastDrawPos = [x, y];
         if (!this.running) this.render();
@@ -163,7 +292,6 @@
       this.canvas.addEventListener("mousedown", onDown);
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
-
       this._mouseHandlers = { onDown, onMove, onUp };
     }
 
@@ -176,20 +304,21 @@
       this._mouseHandlers = null;
     }
 
+    /* ── Brush helpers ────────────────────────────────────────────────────── */
+
     _paintDot(x, y) {
       if (!this._drawCtx) return;
-      const r = (this.brushSize || 25) / 2;
+      const r = this._brushSize / 2;
       this._drawCtx.beginPath();
       this._drawCtx.arc(x, y, r, 0, Math.PI * 2);
       this._drawCtx.fillStyle = "#fff";
       this._drawCtx.fill();
       this._addDrawPoints(x, y, x, y, r * 2);
+      this._hasDrawn = true;
     }
 
     _addDrawPoints(x0, y0, x1, y1, brush) {
-      // Cap total points to avoid performance issues
-      if (this.points.length > 5000) return;
-
+      if (this.points.length > 20000) return;
       const dist = Math.max(1, Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2));
       const r = brush / 2;
       const rand = EffectBase.prng(~~(x0 * 997 + y0 * 7 + this.points.length));
@@ -197,7 +326,7 @@
       const w = this.canvas.width, h = this.canvas.height;
 
       for (let i = 0; i < n; i++) {
-        const t = n === 1 ? 0.5 : i / (n - 1);
+        const t  = n === 1 ? 0.5 : i / (n - 1);
         const px = x0 + (x1 - x0) * t + (rand() - 0.5) * r * 1.6;
         const py = y0 + (y1 - y0) * t + (rand() - 0.5) * r * 1.6;
         const cp = [Math.max(1, Math.min(w - 1, px)), Math.max(1, Math.min(h - 1, py))];
@@ -205,11 +334,44 @@
         this.basePoints.push([...cp]);
         this._pointInside.push(true);
         this.velocities.push({
-          speed: rand() * 0.8 + 0.2,
+          speed:  rand() * 0.8 + 0.2,
           radius: rand() * 4 + 1,
           phaseX: rand() * Math.PI * 2,
           phaseY: rand() * Math.PI * 2,
         });
+      }
+    }
+
+    /* ── Eraser helpers ───────────────────────────────────────────────────── */
+
+    _eraseDot(x, y) {
+      if (!this._drawCtx) return;
+      const r = this._brushSize / 2;
+      this._drawCtx.globalCompositeOperation = "destination-out";
+      this._drawCtx.beginPath();
+      this._drawCtx.arc(x, y, r, 0, Math.PI * 2);
+      this._drawCtx.fillStyle = "rgba(0,0,0,1)";
+      this._drawCtx.fill();
+      this._drawCtx.globalCompositeOperation = "source-over";
+      this._erasePoints(x, y, r);
+    }
+
+    _erasePoints(x, y, r) {
+      const r2 = r * r;
+      for (let i = 0; i < this.basePoints.length; i++) {
+        if (!this._pointInside[i]) continue;
+        const dx = this.basePoints[i][0] - x;
+        const dy = this.basePoints[i][1] - y;
+        if (dx * dx + dy * dy < r2) this._pointInside[i] = false;
+      }
+    }
+
+    _erasePointsLine(x0, y0, x1, y1, r) {
+      const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
+      const steps = Math.max(1, Math.ceil(dist / (r * 0.5)));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        this._erasePoints(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r);
       }
     }
 
@@ -218,10 +380,7 @@
     _buildTextMask() {
       const w = this.canvas.width, h = this.canvas.height;
 
-      if (this._inputMask) {
-        this._maskData = this._inputMask.data;
-        return;
-      }
+      if (this._inputMask) { this._maskData = this._inputMask.data; return; }
 
       if (!this._maskCanvas) this._maskCanvas = document.createElement("canvas");
       this._maskCanvas.width = w;
@@ -231,7 +390,9 @@
       ctx.clearRect(0, 0, w, h);
 
       const text = (document.getElementById("text-input")?.value || "").trimEnd();
-      if (!text && !this._drawCanvas) { this._maskData = null; return; }
+
+      // Nothing to render — blank canvas
+      if (!text && !this._hasDrawn) { this._maskData = null; return; }
 
       if (text) {
         const font   = document.getElementById("font-select")?.value || "sans-serif";
@@ -267,7 +428,6 @@
 
         ctx.fillStyle    = "#fff";
         ctx.textBaseline = "middle";
-
         const lineH  = fs * 1.2;
         const totalH = nLines * lineH;
         const startY = -totalH / 2 + lineH / 2;
@@ -291,8 +451,8 @@
         ctx.restore();
       }
 
-      // Overlay user drawings onto the mask
-      if (this._drawCanvas) {
+      // Overlay user drawings
+      if (this._drawCanvas && this._hasDrawn) {
         ctx.drawImage(this._drawCanvas, 0, 0);
       }
 
@@ -321,7 +481,7 @@
     }
 
     _isInMask(x, y) {
-      if (!this._maskData) return true;
+      if (!this._maskData) return false;
       const w = this.canvas.width;
       const ix = ~~x, iy = ~~y;
       if (ix < 0 || ix >= w || iy < 0 || iy >= this.canvas.height) return false;
@@ -333,64 +493,60 @@
     _generatePoints() {
       const w = this.canvas.width, h = this.canvas.height;
       const rand  = EffectBase.prng(this.params.seed || 0);
-      const count = this.params.points || 500;
+      const count = this.params.points || 800;
 
-      this.points = [];
+      this.points       = [];
       this._pointInside = [];
 
-      if (this._maskData) {
-        const insidePixels = [];
-        const step = Math.max(1, Math.floor(Math.sqrt(w * h / 60000)));
-        for (let y = 0; y < h; y += step)
-          for (let x = 0; x < w; x += step)
-            if (this._isInMask(x, y)) insidePixels.push([x, y]);
+      // No mask → blank canvas, ready for drawing
+      if (!this._maskData) {
+        this.basePoints = [];
+        this.velocities = [];
+        return;
+      }
 
-        if (insidePixels.length > 0) {
-          // ① Inside-text points
-          for (let i = 0; i < count; i++) {
-            const [px, py] = insidePixels[~~(rand() * insidePixels.length)];
-            this.points.push([
-              px + (rand() - 0.5) * step * 2,
-              py + (rand() - 0.5) * step * 2,
-            ]);
-            this._pointInside.push(true);
-          }
+      const insidePixels = [];
+      const step = Math.max(1, Math.floor(Math.sqrt(w * h / 60000)));
+      for (let y = 0; y < h; y += step)
+        for (let x = 0; x < w; x += step)
+          if (this._isInMask(x, y)) insidePixels.push([x, y]);
 
-          // ② Padding points outside for boundary cells
-          const nPad = Math.max(30, Math.round(count * 0.3));
-          let placed = 0, tries = 0;
-          while (placed < nPad && tries < nPad * 50) {
-            const x = rand() * w, y = rand() * h;
-            if (!this._isInMask(x, y)) {
-              this.points.push([x, y]);
-              this._pointInside.push(false);
-              placed++;
-            }
-            tries++;
-          }
-          while (placed < nPad) {
-            this.points.push([rand() * w, rand() * h]);
+      if (insidePixels.length > 0) {
+        // ① Inside-text / drawn-area points
+        for (let i = 0; i < count; i++) {
+          const [px, py] = insidePixels[~~(rand() * insidePixels.length)];
+          this.points.push([
+            px + (rand() - 0.5) * step * 2,
+            py + (rand() - 0.5) * step * 2,
+          ]);
+          this._pointInside.push(true);
+        }
+
+        // ② Padding points outside for boundary cells
+        const nPad = Math.max(30, Math.round(count * 0.3));
+        let placed = 0, tries = 0;
+        while (placed < nPad && tries < nPad * 50) {
+          const x = rand() * w, y = rand() * h;
+          if (!this._isInMask(x, y)) {
+            this.points.push([x, y]);
             this._pointInside.push(false);
             placed++;
           }
-
-          // ③ Corner anchors
-          for (const c of [[1,1],[w-1,1],[1,h-1],[w-1,h-1],[w/2,1],[w/2,h-1],[1,h/2],[w-1,h/2]]) {
-            this.points.push(c);
-            this._pointInside.push(false);
-          }
-        } else {
-          for (let i = 0; i < count; i++) {
-            this.points.push([rand() * w, rand() * h]);
-            this._pointInside.push(true);
-          }
+          tries++;
         }
-      } else {
-        for (let i = 0; i < count; i++) {
+        while (placed < nPad) {
           this.points.push([rand() * w, rand() * h]);
-          this._pointInside.push(true);
+          this._pointInside.push(false);
+          placed++;
+        }
+
+        // ③ Corner anchors
+        for (const c of [[1,1],[w-1,1],[1,h-1],[w-1,h-1],[w/2,1],[w/2,h-1],[1,h/2],[w-1,h/2]]) {
+          this.points.push(c);
+          this._pointInside.push(false);
         }
       }
+      // else: mask exists but no inside pixels (all erased) → no points
 
       for (const p of this.points) {
         p[0] = Math.max(1, Math.min(w - 1, p[0]));
@@ -452,8 +608,8 @@
 
     _colors() {
       const sec = document.getElementById("section-v-color");
-      if (!sec) return { fill: "#1a1a2e", stroke: "#ffffff" };
-      let fill = "#1a1a2e", stroke = "#ffffff";
+      if (!sec) return { fill: "#000000", stroke: "#ffffff" };
+      let fill = "#000000", stroke = "#ffffff";
       sec.querySelectorAll(".color-row").forEach((row) => {
         const lbl = row.querySelector(".sub-label-sm")?.textContent.trim().toLowerCase();
         const inp = row.querySelector('input[type="color"]');
@@ -476,17 +632,23 @@
       this.canvas = canvas;
       this.ctx    = canvas.getContext("2d");
       this._injectControls();
+      this._injectToolbar();
       this._setSliderDefaults();
       this.readParams();
-      this.drawPlaceholder();
 
-      // Init draw canvas for mouse painting
+      // Draw canvas for mouse painting
       this._drawCanvas = document.createElement("canvas");
-      this._drawCanvas.width = canvas.width;
+      this._drawCanvas.width  = canvas.width;
       this._drawCanvas.height = canvas.height;
       this._drawCtx = this._drawCanvas.getContext("2d");
 
       this._setupMouseDraw();
+      this._setupKeyboard();
+
+      // Show blank canvas while loading
+      const bg = document.getElementById("bg-color")?.value || "#000";
+      this.ctx.fillStyle = bg;
+      this.ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       this._loadLib().then(() => {
         this.setup();
@@ -503,7 +665,7 @@
       if (this._drawCanvas &&
           (this._drawCanvas.width !== this.canvas.width ||
            this._drawCanvas.height !== this.canvas.height)) {
-        this._drawCanvas.width = this.canvas.width;
+        this._drawCanvas.width  = this.canvas.width;
         this._drawCanvas.height = this.canvas.height;
         this._drawCtx = this._drawCanvas.getContext("2d");
       }
@@ -514,14 +676,21 @@
     }
 
     render() {
-      if (!this._libReady || !this.points.length) {
-        this.drawPlaceholder();
-        return;
-      }
+      if (!this._libReady) return;
 
       const w   = this.canvas.width;
       const h   = this.canvas.height;
       const ctx = this.ctx;
+      const bg  = document.getElementById("bg-color")?.value
+                  || (this.isLight ? "#e8e8e8" : "#000");
+
+      // No points → blank canvas
+      if (!this.points.length) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+        return;
+      }
+
       this.readParams();
 
       const animSpeed = (this.params.anim_speed ?? 0.5) * this.speed;
@@ -529,10 +698,9 @@
       const trail     = (this.params.trail || 0) / 100;
       const lineW     = this.params.line_weight ?? 0.8;
       const ptSize    = this.params.point_size  ?? 0;
+      const smooth    = (this.params.smooth || 0) / 100;
       const fillMode  = this._fillMode();
       const colors    = this._colors();
-      const bg        = document.getElementById("bg-color")?.value
-                        || (this.isLight ? "#e8e8e8" : "#000");
 
       /* ── Animate ── */
       if (this.running && animSpeed > 0) {
@@ -552,15 +720,27 @@
       const del = window.d3.Delaunay.from(this.points);
       const vor = del.voronoi([0, 0, w, h]);
 
-      /* ── Background ── */
-      if (this.running && trail > 0) {
-        ctx.globalAlpha = 1 - trail * 0.97;
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, h);
+      /* ── Draw target: temp canvas when smooth > 0 ── */
+      let dc = ctx;
+      if (smooth > 0) {
+        if (!this._cellBuf) this._cellBuf = document.createElement("canvas");
+        this._cellBuf.width = w;
+        this._cellBuf.height = h;
+        dc = this._cellBuf.getContext("2d");
+        dc.clearRect(0, 0, w, h);
+      }
+
+      /* ── Background (main canvas, only when NOT smoothing) ── */
+      if (smooth <= 0) {
+        if (this.running && trail > 0) {
+          ctx.globalAlpha = 1 - trail * 0.97;
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, w, h);
+        }
       }
 
       /* ── Cells ── */
@@ -579,12 +759,12 @@
           continue;
         }
 
-        if (!inside) ctx.globalAlpha = chaos;
+        if (!inside) dc.globalAlpha = chaos;
 
-        ctx.beginPath();
-        ctx.moveTo(cell[0][0], cell[0][1]);
-        for (let j = 1; j < cell.length; j++) ctx.lineTo(cell[j][0], cell[j][1]);
-        ctx.closePath();
+        dc.beginPath();
+        dc.moveTo(cell[0][0], cell[0][1]);
+        for (let j = 1; j < cell.length; j++) dc.lineTo(cell[j][0], cell[j][1]);
+        dc.closePath();
 
         if (fillMode !== "none") {
           switch (fillMode) {
@@ -592,38 +772,76 @@
               const dx = this.points[i][0] - w / 2;
               const dy = this.points[i][1] - h / 2;
               const d  = Math.sqrt(dx * dx + dy * dy) / (Math.sqrt(w * w + h * h) / 2);
-              ctx.fillStyle = this._lerpColor(colors.fill, colors.stroke, d);
+              dc.fillStyle = this._lerpColor(colors.fill, colors.stroke, d);
               break;
             }
             case "random":
-              ctx.fillStyle = `hsl(${cRand() * 360},${50 + cRand() * 30}%,${25 + cRand() * 45}%)`;
+              dc.fillStyle = `hsl(${cRand() * 360},${50 + cRand() * 30}%,${25 + cRand() * 45}%)`;
               break;
             default:
-              ctx.fillStyle = colors.fill;
+              dc.fillStyle = colors.fill;
           }
-          ctx.fill();
+          dc.fill();
         }
 
         if (lineW > 0) {
-          ctx.strokeStyle = colors.stroke;
-          ctx.lineWidth   = lineW;
-          ctx.stroke();
+          dc.strokeStyle = colors.stroke;
+          dc.lineWidth   = lineW;
+          dc.stroke();
         }
 
-        if (!inside) ctx.globalAlpha = 1;
+        if (!inside) dc.globalAlpha = 1;
       }
 
       /* ── Points ── */
       if (ptSize > 0) {
-        ctx.fillStyle = colors.stroke;
+        dc.fillStyle = colors.stroke;
         for (let i = 0; i < this.points.length; i++) {
           if (!this._pointInside[i] && chaos <= 0) continue;
-          if (!this._pointInside[i]) ctx.globalAlpha = chaos;
-          ctx.beginPath();
-          ctx.arc(this.points[i][0], this.points[i][1], ptSize, 0, Math.PI * 2);
-          ctx.fill();
-          if (!this._pointInside[i]) ctx.globalAlpha = 1;
+          if (!this._pointInside[i]) dc.globalAlpha = chaos;
+          dc.beginPath();
+          dc.arc(this.points[i][0], this.points[i][1], ptSize, 0, Math.PI * 2);
+          dc.fill();
+          if (!this._pointInside[i]) dc.globalAlpha = 1;
         }
+      }
+
+      /* ── Smooth post-process (bubble silhouette) ── */
+      if (smooth > 0) {
+        const blurPx = Math.round(smooth * 20);
+
+        // Blur cell buffer to create smooth silhouette
+        if (!this._smoothBuf) this._smoothBuf = document.createElement("canvas");
+        this._smoothBuf.width = w;
+        this._smoothBuf.height = h;
+        const sCtx = this._smoothBuf.getContext("2d");
+        sCtx.clearRect(0, 0, w, h);
+        sCtx.filter = `blur(${blurPx}px)`;
+        sCtx.drawImage(this._cellBuf, 0, 0);
+        sCtx.filter = "none";
+
+        // Threshold alpha → hard bubble edge
+        const imgData = sCtx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+        for (let p = 3; p < d.length; p += 4) d[p] = d[p] > 80 ? 255 : 0;
+        sCtx.putImageData(imgData, 0, 0);
+
+        // Clip cells to smooth silhouette
+        dc.globalCompositeOperation = "destination-in";
+        dc.drawImage(this._smoothBuf, 0, 0);
+        dc.globalCompositeOperation = "source-over";
+
+        // Composite onto main canvas
+        if (this.running && trail > 0) {
+          ctx.globalAlpha = 1 - trail * 0.97;
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, w, h);
+        }
+        ctx.drawImage(this._cellBuf, 0, 0);
       }
     }
 
@@ -695,6 +913,8 @@ ${paths}${pts}</svg>`;
       if (this._drawCtx) {
         this._drawCtx.clearRect(0, 0, this._drawCanvas.width, this._drawCanvas.height);
       }
+      this._undoHistory = [];
+      this._hasDrawn = false;
       this.setup();
       this.render();
     }
@@ -702,6 +922,8 @@ ${paths}${pts}</svg>`;
     destroy() {
       this.stop();
       this._removeMouseDraw();
+      this._removeKeyboard();
+      document.querySelector('.canvas-tool[data-tool="eraser"]')?.remove();
       document.querySelectorAll('[data-injected="voronoi"]').forEach((el) => el.remove());
       this._controlsInjected = false;
       this.canvas = null;

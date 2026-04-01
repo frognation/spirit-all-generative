@@ -1,6 +1,6 @@
 # Spirit Generative Tool — Project Notes
 
-Last Updated: 2026-03-26
+Last Updated: 2026-04-01
 
 ---
 
@@ -47,12 +47,15 @@ SVG imports or typed text input, and exports the result as PNG, SVG, or MP4.
 
 | Tab Label | Source | Description (EN) | 설명 (KR) |
 |---|---|---|---|
-| Reaction Diffusion | (신규 구현 예정) | Gray-Scott reaction-diffusion simulation | 회색-스콧 반응 확산 시뮬레이션 |
+| Reaction Diffusion | 자체 구현 (WebGL) | Gray-Scott reaction-diffusion simulation | 회색-스콧 반응 확산 시뮬레이션 |
 | Cellular Automata | `code-base/cellular-automata-` | Rule-based cell grid evolution | 규칙 기반 셀 그리드 진화 |
 | Differential Growth | `code-base/differential-growth` | Organic growth along input boundary | 입력 경계를 따라 유기적 성장 |
 | Limited Aggregation | `code-base/limited-aggregation` | Diffusion-limited aggregation (DLA) | 확산 제한 집적 (DLA) |
 | Space Colonization | `code-base/space-colonization` | Branch-growing toward attractor points | 어트랙터 포인트를 향해 뻗는 브랜치 |
 | Voronoi | `code-base/voronoi` | Voronoi tessellation with Lloyd relaxation | 로이드 이완을 적용한 보로노이 분할 |
+| Obstacle Vein | `code-base/vein-obstacle` (from-images) | Vein growth from image boundaries | 이미지 경계에서 혈관/잎맥 성장 |
+| Painting Veins | `code-base/vein-obstacle` (painting) | Mouse-driven vein painting | 마우스로 혈관/잎맥 페인팅 |
+| Neuron Growth | 자체 구현 | Dendritic neuron branching from input | 뉴런 수상돌기 가지 성장 |
 
 ---
 
@@ -121,7 +124,7 @@ Left sidebar state persists when switching effect tabs.
 - **Undo / Redo**: 파라미터 변경 이력 관리 / Parameter change history
 - **PNG Export**: 현재 캔버스 스냅샷을 PNG로 저장 / Save canvas snapshot as PNG
 - **SVG Export**: 가능한 경우 벡터 SVG로 출력 / Export as vector SVG when possible
-- **MP4 Export**: 애니메이션 효과의 경우 MP4 영상 출력 / Export animated effects as MP4
+- **MP4 Export**: WebCodecs + mp4-muxer 기반 진짜 MP4 출력 (H.264) / Real MP4 export via WebCodecs + mp4-muxer (H.264), progress overlay with cancel
 
 ---
 
@@ -129,30 +132,35 @@ Left sidebar state persists when switching effect tabs.
 
 ```
 spirit-all-generative/
-├── 00_Project Note.md            ← This file
+├── 00_Project Note.md            ← This file (프로젝트 전체 현황)
 ├── 01_Parallel Work Guide.md     ← 병렬 작업 가이드 (다른 세션용)
 ├── code-base/                    ← Source generative algorithm projects
 │   ├── cellular-automata-/
 │   ├── differential-growth/
 │   ├── limited-aggregation/
 │   ├── space-colonization/
+│   ├── vein-obstacle/              ← Obstacle Vein + Painting Veins 원본
 │   └── voronoi/
-├── generative-tool/              ← 통합 툴
+├── generative-tool/              ← 통합 툴 (메인 앱)
 │   ├── index.html                  ⛔ 공유 — 병렬 세션에서 수정 금지
 │   ├── style.css                   ⛔ 공유
-│   ├── script.js                   ⛔ 공유 (UI 로직)
+│   ├── script.js                   ⛔ 공유 (UI 로직, 입력/출력/undo/zoom 등)
+│   ├── fonts/                      ← 커스텀 폰트 폴더 (TTF/OTF/WOFF2)
+│   │   ├── DearSirMadam.ttf         ← 기본 선택 폰트
+│   │   └── fonts.json                ← 폰트 목록 자동 로드
 │   └── effects/                    ✅ 이펙트별 독립 모듈
 │       ├── effect-base.js            ⛔ 공유 (베이스 클래스)
-│       ├── reaction-diffusion.js     ✅ 세션 1
-│       ├── cellular-automata.js      ✅ 세션 2
-│       ├── differential-growth.js    ✅ 세션 3
-│       ├── limited-aggregation.js    ✅ 세션 4
-│       ├── space-colonization.js     ✅ 세션 5
-│       └── voronoi.js                ✅ 세션 6
+│       ├── reaction-diffusion.js     ✅ WebGL 기반, 프리셋 포함
+│       ├── cellular-automata.js      ✅ 해상도 조절 가능
+│       ├── differential-growth.js    ✅
+│       ├── limited-aggregation.js    ✅
+│       ├── space-colonization.js     ✅
+│       ├── voronoi.js                ✅
+│       ├── vein-core.js              ⛔ 공유 (Vein 이펙트 공통 코어)
+│       ├── obstacle-vein.js          ✅ 이미지 기반 Vein 성장
+│       ├── painting-veins.js         ✅ 마우스 페인팅 Vein
+│       └── neuron-growth.js          ✅ 뉴런 수상돌기 가지 성장
 └── ui-design-base/               ← UI 디자인 레퍼런스 베이스
-    ├── index.html
-    ├── style.css
-    └── script.js
 ```
 
 ---
@@ -175,28 +183,70 @@ spirit-all-generative/
 - [x] `01_Parallel Work Guide.md` 병렬 작업 가이드 작성
 - [x] 이펙트 모듈 인터페이스: init/setup/render/reset/destroy
 
-### Phase 2 — Canvas & Input Rendering | 캔버스 & 입력 렌더링
-- [ ] Text rendering to canvas (font, weight, color, transform)
-- [ ] SVG import and render to canvas
-- [ ] Input → mask/path extraction for effect seeding
+### Phase 2 — Canvas & Input Rendering | 캔버스 & 입력 렌더링 ✅
+- [x] Text rendering to canvas (font, weight, color, transform)
+- [x] SVG / PNG / JPG / WebP import + drag-drop + Cmd+V clipboard paste
+- [x] Image color invert option
+- [x] Font upload (TTF/OTF/WOFF2) + fonts/ 폴더 자동 로드
+- [x] Default font: Dear Sir Madam
+- [x] Input → mask/path extraction for effect seeding
+- [x] Canvas resolution: 직접 입력 + 드래그 조절, 프리셋 (1:1, 16:9, 9:16, 4K)
+- [x] Default canvas: 16:9 (1920×1080)
 
-### Phase 3 — Effect Implementation | 이펙트 구현
-- [ ] Reaction Diffusion (Gray-Scott, WebGL or Canvas2D)
-- [ ] Cellular Automata (port from `code-base/cellular-automata-`)
-- [ ] Differential Growth (port from `code-base/differential-growth`)
-- [ ] Limited Aggregation (port from `code-base/limited-aggregation`)
-- [ ] Space Colonization (port from `code-base/space-colonization`)
-- [ ] Voronoi (port from `code-base/voronoi`)
+### Phase 3 — Effect Implementation | 이펙트 구현 ✅ (9 effects)
+- [x] Reaction Diffusion (WebGL, 프리셋 포함)
+- [x] Cellular Automata (해상도 조절 가능)
+- [x] Differential Growth
+- [x] Limited Aggregation
+- [x] Space Colonization
+- [x] Voronoi
+- [x] Obstacle Vein (이미지 기반 vein 성장)
+- [x] Painting Veins (마우스 vein 페인팅)
+- [x] Neuron Growth (뉴런 수상돌기 가지 성장, SVG 벡터 출력 지원)
 
-### Phase 4 — Animation & Export | 애니메이션 & 출력
-- [ ] Animation loop with play/pause/speed
-- [ ] PNG export (canvas.toDataURL)
-- [ ] SVG export (SVG-capable effects)
-- [ ] MP4 export (MediaRecorder API or ffmpeg.wasm)
-- [ ] Undo/Redo history stack
+### Phase 4 — Animation & Export | 애니메이션 & 출력 ✅
+- [x] Animation loop with play/pause/speed (0.2×–3.0×)
+- [x] PNG export (canvas.toDataURL)
+- [x] SVG vector export (text, voronoi 등 벡터 지원 이펙트)
+- [x] MP4 export — WebCodecs + mp4-muxer (H.264), 진행률 오버레이 + 취소
+- [x] Undo/Redo history stack + Cmd+Z / Cmd+Shift+Z 단축키
+
+### Phase 4.5 — Tools & Interaction | 툴 & 인터랙션 ✅
+- [x] Brush tool — 이펙트에 브러쉬로 그리기, 크기 조절
+- [x] Smudge tool — 손가락 끌기 (픽셀 스머지)
+- [x] Cmd+Wheel zoom in/out
+- [x] Canvas toolbar (상단 중앙: 브러쉬/스머지 전환 + 크기 슬라이더)
 
 ### Phase 5 — Polish | 폴리시
-- [ ] Effect tab → dropdown when more than 6 effects
+- [ ] Effect tab → dropdown when more than 10 effects
 - [ ] Preset save/load (JSON)
-- [ ] Keyboard shortcuts
 - [ ] Performance optimization (WebWorker / WebGL)
+- [ ] 각 이펙트별 세부 파라미터 미세조정
+
+---
+
+## SVG Vector Export Capability | SVG 벡터 출력 가능 여부
+
+| Effect | SVG Vector | Notes |
+|---|---|---|
+| Reaction Diffusion | ❌ | WebGL 픽셀 기반, PNG만 가능 |
+| Cellular Automata | ❌ | 픽셀 그리드 기반 |
+| Differential Growth | ✅ | 노드+엣지 → SVG path 변환 가능 |
+| Limited Aggregation | ❌ | 픽셀 기반 파티클 |
+| Space Colonization | ✅ | 브랜치 → SVG line/path |
+| Voronoi | ✅ | 셀 경계 → SVG polygon/path |
+| Obstacle Vein | ✅ | 노드 네트워크 → SVG path |
+| Painting Veins | ✅ | 노드 네트워크 → SVG path |
+| Neuron Growth | ✅ | 뉴런 가지 → SVG path |
+
+---
+
+## Deployment | 배포 정보
+
+| Item | URL |
+|---|---|
+| GitHub | https://github.com/frognation/spirit-all-generative |
+| Vercel (Live) | https://spirit-all-generative.vercel.app |
+| Tool Direct | https://spirit-all-generative.vercel.app/generative-tool/ |
+
+git push → Vercel 자동 재배포됨.
