@@ -1540,6 +1540,327 @@ ${contentSvg}  </g>
 
 
   /* ══════════════════════════════════════════════════════════════════════════
+     Preset Save / Load JSON — 모든 설정값 저장 & 복원
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /** Collect every setting from the UI into a plain object */
+  function collectAllSettings() {
+    const data = { _version: 1, _timestamp: new Date().toISOString() };
+
+    // ── 1. Input mode ──
+    data.inputMode = inputMode;
+
+    // ── 2. Text input ──
+    data.textContent = document.getElementById("text-input")?.value || "";
+    data.fontFamily  = document.getElementById("font-select")?.value || "";
+    data.fontWeight  = document.querySelector(".pill[data-weight].active")?.getAttribute("data-weight") || "400";
+    data.textColor   = document.getElementById("text-color")?.value || "#ffffff";
+
+    // ── 3. Image invert ──
+    data.imageInverted = document.getElementById("image-invert")?.checked || false;
+
+    // ── 4. Transform sliders ──
+    data.transform = {};
+    document.querySelectorAll("#section-transform .slider-row").forEach(row => {
+      const lbl = row.querySelector(".slider-label")?.textContent.trim();
+      const inp = row.querySelector("input[type='range']");
+      if (lbl && inp) data.transform[lbl] = parseFloat(inp.value);
+    });
+
+    // ── 5. Canvas settings ──
+    data.canvasWidth  = canvas.width;
+    data.canvasHeight = canvas.height;
+    data.bgColor = document.getElementById("bg-color")?.value || "#000000";
+    const activeCanvasPill = document.querySelector("[data-canvas-size].active");
+    data.canvasSizePreset = activeCanvasPill?.getAttribute("data-canvas-size") || null;
+    const scaleSlider = document.querySelector("#section-canvas-cfg .slider-row input[type='range']");
+    data.canvasScale = scaleSlider ? parseFloat(scaleSlider.value) : 1;
+
+    // ── 6. Active effect ──
+    data.activeEffect = currentEffectId;
+
+    // ── 7. HUD state ──
+    data.playing = playing;
+    data.speed = parseFloat(document.getElementById("speed-slider")?.value || 1);
+
+    // ── 8. Brush / Smudge tool ──
+    const activeTool = document.querySelector(".canvas-tool.active");
+    data.activeTool = activeTool?.getAttribute("data-tool") || "brush";
+    data.brushSize = parseInt(document.getElementById("brush-size")?.value || 20);
+
+    // ── 9. Zoom ──
+    data.zoom = typeof _zoomLevel !== "undefined" ? _zoomLevel : 1;
+
+    // ── 10. All right-sidebar controls (per-effect panels) ──
+    data.effectParams = {};
+    document.querySelectorAll(".effect-panel").forEach(panel => {
+      const id = panel.id.replace("effect-", "");
+      const params = {};
+
+      // Sliders
+      panel.querySelectorAll(".slider-row").forEach(row => {
+        const lbl = row.querySelector(".slider-label")?.textContent.trim();
+        const inp = row.querySelector("input[type='range']");
+        if (lbl && inp) params["slider:" + lbl] = parseFloat(inp.value);
+      });
+
+      // Color inputs
+      panel.querySelectorAll(".color-row").forEach((row, idx) => {
+        const lbl = row.querySelector(".sub-label-sm")?.textContent.trim() || `color${idx}`;
+        const col = row.querySelector("input[type='color']");
+        if (col) params["color:" + lbl] = col.value;
+      });
+
+      // Pill groups
+      panel.querySelectorAll(".pill-group").forEach(group => {
+        const pills = group.querySelectorAll(".pill");
+        const activePill = group.querySelector(".pill.active");
+        if (pills.length && activePill) {
+          // Use first pill's data-group or parent label
+          const groupName = activePill.getAttribute("data-group") ||
+                            group.previousElementSibling?.textContent.trim() || `pillGroup`;
+          params["pill:" + groupName] = activePill.textContent.trim();
+        }
+      });
+
+      // Seed values
+      panel.querySelectorAll(".seed-value").forEach(sv => {
+        params["seed:" + sv.id] = sv.textContent.trim();
+      });
+
+      // Select elements
+      panel.querySelectorAll("select").forEach(sel => {
+        if (sel.id) params["select:" + sel.id] = sel.value;
+      });
+
+      // Checkboxes
+      panel.querySelectorAll("input[type='checkbox']").forEach(cb => {
+        if (cb.id) params["check:" + cb.id] = cb.checked;
+      });
+
+      data.effectParams[id] = params;
+    });
+
+    return data;
+  }
+
+  /** Apply a settings object back to the UI */
+  function applyAllSettings(data) {
+    if (!data || data._version !== 1) { alert("Invalid preset file."); return; }
+
+    // ── 1. Input mode ──
+    if (data.inputMode) {
+      const tab = document.querySelector(`.input-tab[data-input-tab="${data.inputMode}"]`);
+      if (tab) tab.click();
+    }
+
+    // ── 2. Text input ──
+    const textArea = document.getElementById("text-input");
+    if (textArea && data.textContent != null) textArea.value = data.textContent;
+
+    if (data.fontFamily) {
+      const fontSel = document.getElementById("font-select");
+      if (fontSel) {
+        // Check if option exists, if not try to find closest match
+        const opts = Array.from(fontSel.options);
+        const match = opts.find(o => o.value === data.fontFamily);
+        if (match) fontSel.value = data.fontFamily;
+      }
+    }
+
+    if (data.fontWeight) {
+      document.querySelectorAll(".pill[data-weight]").forEach(p => p.classList.remove("active"));
+      const wp = document.querySelector(`.pill[data-weight="${data.fontWeight}"]`);
+      if (wp) wp.classList.add("active");
+    }
+
+    if (data.textColor) {
+      const tc = document.getElementById("text-color");
+      const th = document.getElementById("text-color-hex");
+      if (tc) tc.value = data.textColor;
+      if (th) th.value = data.textColor;
+    }
+
+    // ── 3. Image invert ──
+    const invertCb = document.getElementById("image-invert");
+    if (invertCb && data.imageInverted != null) {
+      invertCb.checked = data.imageInverted;
+      imageInverted = data.imageInverted;
+    }
+
+    // ── 4. Transform ──
+    if (data.transform) {
+      document.querySelectorAll("#section-transform .slider-row").forEach(row => {
+        const lbl = row.querySelector(".slider-label")?.textContent.trim();
+        const inp = row.querySelector("input[type='range']");
+        const valEl = row.querySelector(".slider-value");
+        if (lbl && inp && data.transform[lbl] != null) {
+          inp.value = data.transform[lbl];
+          inp.dispatchEvent(new Event("input"));
+        }
+      });
+    }
+
+    // ── 5. Canvas ──
+    if (data.canvasWidth && data.canvasHeight) {
+      canvas.width = data.canvasWidth;
+      canvas.height = data.canvasHeight;
+      _baseW = data.canvasWidth;
+      _baseH = data.canvasHeight;
+      syncResInputs(data.canvasWidth, data.canvasHeight);
+    }
+
+    if (data.canvasSizePreset) {
+      document.querySelectorAll("[data-canvas-size]").forEach(b => b.classList.remove("active"));
+      const pill = document.querySelector(`[data-canvas-size="${data.canvasSizePreset}"]`);
+      if (pill) pill.classList.add("active");
+    }
+
+    if (data.bgColor) {
+      const bc = document.getElementById("bg-color");
+      const bh = document.getElementById("bg-color-hex");
+      if (bc) bc.value = data.bgColor;
+      if (bh) bh.value = data.bgColor;
+    }
+
+    if (data.canvasScale != null) {
+      const scaleSlider = document.querySelector("#section-canvas-cfg .slider-row input[type='range']");
+      if (scaleSlider) { scaleSlider.value = data.canvasScale; scaleSlider.dispatchEvent(new Event("input")); }
+    }
+
+    // ── 6. Active effect ──
+    if (data.activeEffect) {
+      const tab = document.querySelector(`.effect-tab[data-effect="${data.activeEffect}"]`);
+      if (tab) tab.click();
+    }
+
+    // ── 7. HUD ──
+    if (data.speed != null) {
+      const ss = document.getElementById("speed-slider");
+      const sl = document.getElementById("speed-label");
+      if (ss) { ss.value = data.speed; ss.dispatchEvent(new Event("input")); }
+    }
+
+    // ── 8. Brush ──
+    if (data.brushSize != null) {
+      const bs = document.getElementById("brush-size");
+      if (bs) { bs.value = data.brushSize; bs.dispatchEvent(new Event("input")); }
+    }
+    if (data.activeTool) {
+      const toolBtn = document.querySelector(`.canvas-tool[data-tool="${data.activeTool}"]`);
+      if (toolBtn) toolBtn.click();
+    }
+
+    // ── 9. Zoom ──
+    if (data.zoom != null && typeof _zoomLevel !== "undefined") {
+      _zoomLevel = data.zoom;
+      const vp = document.querySelector(".canvas-viewport");
+      if (vp && canvas) canvas.style.transform = `scale(${_zoomLevel})`;
+    }
+
+    // ── 10. Effect params (right sidebar) ──
+    if (data.effectParams) {
+      for (const [panelId, params] of Object.entries(data.effectParams)) {
+        const panel = document.getElementById("effect-" + panelId);
+        if (!panel) continue;
+
+        for (const [key, val] of Object.entries(params)) {
+          const [type, name] = [key.split(":")[0], key.substring(key.indexOf(":") + 1)];
+
+          if (type === "slider") {
+            panel.querySelectorAll(".slider-row").forEach(row => {
+              const lbl = row.querySelector(".slider-label")?.textContent.trim();
+              if (lbl === name) {
+                const inp = row.querySelector("input[type='range']");
+                if (inp) { inp.value = val; inp.dispatchEvent(new Event("input")); }
+              }
+            });
+          }
+
+          if (type === "color") {
+            panel.querySelectorAll(".color-row").forEach(row => {
+              const lbl = row.querySelector(".sub-label-sm")?.textContent.trim();
+              if (lbl === name) {
+                const col = row.querySelector("input[type='color']");
+                const hex = row.querySelector(".input-text");
+                if (col) col.value = val;
+                if (hex) hex.value = val;
+              }
+            });
+          }
+
+          if (type === "pill") {
+            panel.querySelectorAll(".pill-group").forEach(group => {
+              const pills = group.querySelectorAll(".pill");
+              pills.forEach(p => {
+                if (p.textContent.trim() === val) {
+                  const grpName = p.getAttribute("data-group");
+                  if (grpName) {
+                    group.querySelectorAll(".pill").forEach(pp => pp.classList.remove("active"));
+                  }
+                  p.classList.add("active");
+                }
+              });
+            });
+          }
+
+          if (type === "seed") {
+            const el = document.getElementById(name);
+            if (el) el.textContent = val;
+          }
+
+          if (type === "select") {
+            const sel = document.getElementById(name);
+            if (sel) sel.value = val;
+          }
+
+          if (type === "check") {
+            const cb = document.getElementById(name);
+            if (cb) cb.checked = val;
+          }
+        }
+      }
+    }
+
+    // Trigger re-render
+    onInputChange();
+  }
+
+  // ── Save JSON button ──
+  document.getElementById("btn-save-json")?.addEventListener("click", () => {
+    const data = collectAllSettings();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `spirit-preset-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Load JSON button ──
+  const presetFileInput = document.getElementById("preset-file-input");
+  document.getElementById("btn-load-json")?.addEventListener("click", () => {
+    presetFileInput?.click();
+  });
+  presetFileInput?.addEventListener("change", () => {
+    const file = presetFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        applyAllSettings(data);
+      } catch (e) {
+        alert("Failed to parse preset: " + e.message);
+      }
+    };
+    reader.readAsText(file);
+    presetFileInput.value = "";
+  });
+
+  /* ══════════════════════════════════════════════════════════════════════════
      Boot
      ══════════════════════════════════════════════════════════════════════════ */
   loadCustomFonts();

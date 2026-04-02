@@ -9,7 +9,7 @@
   /* ── Parameter Presets (Robert Munafo / mrob) ────────────────────────── */
 
   const PRESETS = [
-    { name: "Custom",                    f: 0.055, k: 0.062  },
+    { name: "Custom",                    f: 0.038, k: 0.059  },
     { name: "Negative bubbles",          f: 0.098, k: 0.0555 },
     { name: "Positive bubbles",          f: 0.098, k: 0.057  },
     { name: "Precritical bubbles",       f: 0.082, k: 0.059  },
@@ -369,9 +369,9 @@ void main() {
         modeWrap.innerHTML =
           `<div class="sub-label" style="margin-bottom:6px">Display</div>` +
           `<div class="pill-group">` +
-            `<button class="pill active" data-group="rd-display" data-val="0">Custom</button>` +
+            `<button class="pill" data-group="rd-display" data-val="0">Custom</button>` +
             `<button class="pill" data-group="rd-display" data-val="1">B&W</button>` +
-            `<button class="pill" data-group="rd-display" data-val="2">Sharp</button>` +
+            `<button class="pill active" data-group="rd-display" data-val="2">Sharp</button>` +
             `<button class="pill" data-group="rd-display" data-val="3">HSL</button>` +
             `<button class="pill" data-group="rd-display" data-val="4">Rainbow</button>` +
             `<button class="pill" data-group="rd-display" data-val="5">Raw</button>` +

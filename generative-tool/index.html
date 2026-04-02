@@ -176,6 +176,23 @@
       </div>
     </div>
 
+    <hr class="divider" />
+
+    <!-- ── Preset Save / Load ── -->
+    <div>
+      <button class="section-btn" data-section-toggle="preset-io">
+        <span class="section-title">Preset</span>
+        <span class="section-chevron">&#9662;</span>
+      </button>
+      <div class="section-body" id="section-preset-io" style="gap:8px">
+        <div style="display:flex;gap:6px">
+          <button class="btn-unload" id="btn-save-json" style="flex:1">Save JSON</button>
+          <button class="btn-unload" id="btn-load-json" style="flex:1">Load JSON</button>
+        </div>
+        <input type="file" id="preset-file-input" accept=".json" hidden />
+      </div>
+    </div>
+
     <div class="sidebar-spacer"></div>
   </div>
 
@@ -257,13 +274,13 @@
           </div>
           <div class="slider-row">
             <span class="slider-label">Feed Rate</span>
-            <input type="range" min="0.010" max="0.100" step="0.001" value="0.055" data-format="fixed3" />
-            <span class="slider-value">0.055</span>
+            <input type="range" min="0.010" max="0.100" step="0.001" value="0.038" data-format="fixed3" />
+            <span class="slider-value">0.038</span>
           </div>
           <div class="slider-row">
             <span class="slider-label">Kill Rate</span>
-            <input type="range" min="0.040" max="0.075" step="0.001" value="0.062" data-format="fixed3" />
-            <span class="slider-value">0.062</span>
+            <input type="range" min="0.040" max="0.075" step="0.001" value="0.059" data-format="fixed3" />
+            <span class="slider-value">0.059</span>
           </div>
           <div class="slider-row">
             <span class="slider-label">Diffuse A</span>
